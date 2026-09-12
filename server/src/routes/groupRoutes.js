@@ -1,0 +1,29 @@
+import { Router } from 'express';
+import * as ctrl from '../controllers/groupController.js';
+import * as gq from '../controllers/groupQuizController.js';
+import { validate } from '../middleware/validate.js';
+import { createGroupSchema } from '../validators/groupValidators.js';
+import { requireAuth } from '../middleware/auth.js';
+import * as lb from '../controllers/leaderboardController.js';
+
+const router = Router();
+router.use(requireAuth);
+router.get('/', ctrl.searchGroups);
+router.post('/', validate(createGroupSchema), ctrl.createGroup);
+router.get('/:id', ctrl.getGroup);
+router.delete('/:id', ctrl.deleteGroup);
+router.post('/:id/join', ctrl.joinGroup);
+router.post('/:id/leave', ctrl.leaveGroup);
+router.get('/:id/members', ctrl.listMembers);
+router.delete('/:id/members/:userId', ctrl.removeMember);
+router.patch('/:id/members/:userId/moderator', ctrl.setModerator);
+router.get('/:id/messages', ctrl.getMessages);
+router.get('/:id/leaderboard', lb.groupLeaderboard);
+
+router.post('/:id/quizzes', gq.createGroupQuiz);
+router.get('/:id/quizzes', gq.listGroupQuizzes);
+router.post('/:id/quizzes/:groupQuizId/start', gq.startGroupQuiz);
+router.post('/:id/quizzes/:groupQuizId/join', gq.joinGroupQuiz);
+router.post('/:id/quizzes/:groupQuizId/submit', gq.submitGroupQuiz);
+router.get('/:id/quizzes/:groupQuizId/leaderboard', lb.quizLeaderboard);
+export default router;

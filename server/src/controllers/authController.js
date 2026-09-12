@@ -1,0 +1,89 @@
+import bcrypt from 'bcryptjs';
+import { prisma } from '../config/db.js';
+import { ApiError } from '../utils/ApiError.js';
+import { ok } from '../utils/response.js';
+import { signAccessToken, generateRefreshTokenValue } from '../utils/tokens.js';
+import { asyncHandler } from '../utils/asyncHandler.js';
+
+const REFRESH_COOKIE = 'studify_refresh';
+const REFRESH_TTL_DAYS = 30;
+
+const setRefreshCookie = (res, token) => {
+  res.cookie(REFRESH_COOKIE, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000,
+    path: '/api/auth',
+  });
+};
+
+const issueTokens = async (userId) => {
+  const accessToken = signAccessToken(userId);
+  const refreshToken = generateRefreshTokenValue();
+  const expiresAt = new Date(Date.now() + REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000);
+  await prisma.refreshToken.create({ data: { token: refreshToken, userId, expiresAt } });
+  return { accessToken, refreshToken };
+};
+
+const publicUser = (u) => ({
+  id: u.id, name: u.name, username: u.username, email: u.email,
+  educationLevel: u.educationLevel, grade: u.grade, institution: u.institution,
+  avatarUrl: u.avatarUrl, role: u.role, points: u.points, streakCount: u.streakCount,
+});
+
+export const register = asyncHandler(async (req, res) => {
+  const { name, username, email, password, educationLevel, grade, institution } = req.body;
+  const existing = await prisma.user.findFirst({ where: { OR: [{ email }, { username }] } });
+  if (existing) throw new ApiError(409, 'Email or username already in use');
+
+  const passwordHash = await bcrypt.hash(password, 10);
+  const user = await prisma.user.create({
+    data: { name, username, email, passwordHash, educationLevel, grade, institution },
+  });
+
+  const { accessToken, refreshToken } = await issueTokens(user.id);
+  setRefreshCookie(res, refreshToken);
+  ok(res, { user: publicUser(user), accessToken }, 201);
+});
+
+export const login = asyncHandler(async (req, res) => {
+  const { identifier, password } = req.body;
+  const user = await prisma.user.findFirst({ where: { OR: [{ email: identifier }, { username: identifier }] } });
+  if (!user || !user.isActive) throw new ApiError(401, 'Invalid credentials');
+
+  const match = await bcrypt.compare(password, user.passwordHash);
+  if (!match) throw new ApiError(401, 'Invalid credentials');
+
+  const { accessToken, refreshToken } = await issueTokens(user.id);
+  setRefreshCookie(res, refreshToken);
+  ok(res, { user: publicUser(user), accessToken });
+});
+
+export const refresh = asyncHandler(async (req, res) => {
+  const token = req.cookies?.[REFRESH_COOKIE];
+  if (!token) throw new ApiError(401, 'No refresh token');
+
+  const stored = await prisma.refreshToken.findUnique({ where: { token } });
+  if (!stored || stored.revoked || stored.expiresAt < new Date()) {
+    throw new ApiError(401, 'Refresh token invalid or expired');
+  }
+
+  await prisma.refreshToken.update({ where: { token }, data: { revoked: true } });
+  const { accessToken, refreshToken } = await issueTokens(stored.userId);
+  setRefreshCookie(res, refreshToken);
+  ok(res, { accessToken });
+});
+
+export const logout = asyncHandler(async (req, res) => {
+  const token = req.cookies?.[REFRESH_COOKIE];
+  if (token) {
+    await prisma.refreshToken.updateMany({ where: { token }, data: { revoked: true } });
+  }
+  res.clearCookie(REFRESH_COOKIE, { path: '/api/auth' });
+  ok(res, { loggedOut: true });
+});
+
+export const me = asyncHandler(async (req, res) => {
+  ok(res, { user: publicUser(req.user) });
+});

@@ -1,0 +1,19 @@
+@import "tailwindcss";
+
+:root {
+  --studify-bg: #0A0F1E;
+  --studify-blue: #3B82F6;
+  --studify-green: #10B981;
+  --studify-amber: #F59E0B;
+}
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background-color: #0B1120;
+  color: #E5E7EB;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #1F2937; border-radius: 4px; }
+
+@plugin "@tailwindcss/typography";
