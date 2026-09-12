@@ -33,3 +33,5 @@ server/prisma/dev.db
 # Editor
 .vscode/
 .idea/
+server/.env
+server/.env.example
