@@ -26,12 +26,63 @@ import standardTestRoutes from './routes/standardTestRoutes.js';
 import { notFound, errorHandler } from './middleware/errorHandler.js';
 import { registerGroupChat } from './sockets/groupChat.js';
 
+export const isAllowedOrigin = (origin) => {
+    if (!origin) return true; // allow curl, mobile apps, server-side requests
+    const normalized = origin.trim().replace(/\/$/, '');
+
+    const envOrigins = (process.env.CLIENT_URL || '')
+        .split(',')
+        .map((o) => o.trim().replace(/\/$/, ''))
+        .filter(Boolean);
+
+    if (envOrigins.includes(normalized)) return true;
+
+    const defaultOrigins = [
+        'http://localhost:5173',
+        'http://localhost:3000',
+        'http://127.0.0.1:5173',
+        'https://studify-ochre.vercel.app',
+    ];
+    if (defaultOrigins.includes(normalized)) return true;
+
+    // Allow all vercel deployment preview URLs
+    if (/^https:\/\/.*\.vercel\.app$/.test(normalized)) return true;
+    if (/^http:\/\/localhost(:\d+)?$/.test(normalized)) return true;
+    if (/^http:\/\/127\.0\.0\.1(:\d+)?$/.test(normalized)) return true;
+
+    return false;
+};
+
+export const corsOptions = {
+    origin: (origin, callback) => {
+        if (isAllowedOrigin(origin)) {
+            callback(null, true);
+        } else {
+            callback(null, false);
+        }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+    exposedHeaders: ['Set-Cookie'],
+};
+
 export const createApp = () => {
     const app = express();
 
-    const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173').split(',');
-    app.use(helmet());
-    app.use(cors({ origin: allowedOrigins, credentials: true }));
+    app.set('trust proxy', 1);
+
+    // Apply CORS before helmet & routes
+    app.use(cors(corsOptions));
+    app.options('*', cors(corsOptions));
+
+    app.use(
+        helmet({
+            crossOriginResourcePolicy: { policy: 'cross-origin' },
+            crossOriginEmbedderPolicy: false,
+        })
+    );
+
     app.use(express.json({ limit: '2mb' }));
     app.use(cookieParser());
     app.use('/uploads', express.static(path.resolve('uploads')));
@@ -61,8 +112,7 @@ export const createApp = () => {
 if (process.env.NODE_ENV !== 'test') {
     const app = createApp();
     const server = http.createServer(app);
-    const allowedOrigins = (process.env.CLIENT_URL || 'http://localhost:5173').split(',');
-    const io = new Server(server, { cors: { origin: allowedOrigins, credentials: true } });
+    const io = new Server(server, { cors: corsOptions });
     registerGroupChat(io);
 
     const PORT = process.env.PORT || 5000;

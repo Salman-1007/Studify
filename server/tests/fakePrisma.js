@@ -141,7 +141,7 @@ export const createFakePrisma = () => {
             const pendingNested = [];
             for (const [field, rel] of Object.entries(relations)) {
                 if (plainData[field] && typeof plainData[field] === 'object') {
-                    const spec = plainData[field].create ? ? plainData[field];
+                    const spec = plainData[field].create ?? plainData[field];
                     pendingNested.push({ field, rel, items: Array.isArray(spec) ? spec : [spec] });
                     delete plainData[field];
                 }

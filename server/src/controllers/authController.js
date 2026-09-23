@@ -8,11 +8,13 @@ import { asyncHandler } from '../utils/asyncHandler.js';
 const REFRESH_COOKIE = 'studify_refresh';
 const REFRESH_TTL_DAYS = 30;
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 const setRefreshCookie = (res, token) => {
     res.cookie(REFRESH_COOKIE, token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        secure: isProduction,
+        sameSite: isProduction ? 'none' : 'lax',
         maxAge: REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000,
         path: '/api/auth',
     });
@@ -167,7 +169,12 @@ export const logout = asyncHandler(async(req, res) => {
     if (token) {
         await prisma.refreshToken.updateMany({ where: { token }, data: { revoked: true } });
     }
-    res.clearCookie(REFRESH_COOKIE, { path: '/api/auth' });
+    res.clearCookie(REFRESH_COOKIE, {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: isProduction ? 'none' : 'lax',
+        path: '/api/auth',
+    });
     ok(res, { loggedOut: true });
 });
 

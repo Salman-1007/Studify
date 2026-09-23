@@ -76,7 +76,7 @@ const runLiveVerification = async() => {
                 password: 'AdminPass123!',
             });
 
-        if (adminLoginRes.status !== 200 || !adminLoginRes.body.data ? .accessToken) {
+        if (adminLoginRes.status !== 200 || !adminLoginRes.body.data ?.accessToken) {
             throw new Error(`STEP 2 Failed: Admin login failed (${adminLoginRes.status}): ${JSON.stringify(adminLoginRes.body)}`);
         }
         adminToken = adminLoginRes.body.data.accessToken;
@@ -107,7 +107,7 @@ const runLiveVerification = async() => {
                 defaultChapterId: chapter1Id,
             });
 
-        if (firstImportRes.status !== 200 || firstImportRes.body.data ? .importedCount !== 1) {
+        if (firstImportRes.status !== 200 || firstImportRes.body.data ?.importedCount !== 1) {
             throw new Error(`STEP 3 Failed: First import failed: ${JSON.stringify(firstImportRes.body)}`);
         }
         console.log(`✓ First import succeeded: 1 imported, 0 skipped`);
@@ -122,7 +122,7 @@ const runLiveVerification = async() => {
                 defaultChapterId: chapter1Id,
             });
 
-        if (secondImportRes.status !== 200 || secondImportRes.body.data ? .skippedCount !== 1) {
+        if (secondImportRes.status !== 200 || secondImportRes.body.data ?.skippedCount !== 1) {
             throw new Error(`STEP 3 Failed: Duplicate detection failed! Expected 1 skipped: ${JSON.stringify(secondImportRes.body)}`);
         }
         console.log(`✓ Duplicate detection verified! 0 imported, 1 skipped (${secondImportRes.body.data.skippedCount} duplicate skipped)`);
@@ -140,7 +140,7 @@ const runLiveVerification = async() => {
             .set('Authorization', `Bearer ${adminToken}`)
             .send({ status: 'APPROVED' });
 
-        if (approveRes.status !== 200 || approveRes.body.data ? .question ? .status !== 'APPROVED') {
+        if (approveRes.status !== 200 || approveRes.body.data ?.question ?.status !== 'APPROVED') {
             throw new Error(`STEP 3 Failed: Question approval failed: ${JSON.stringify(approveRes.body)}`);
         }
         console.log(`✓ Question successfully approved`);
@@ -190,7 +190,7 @@ const runLiveVerification = async() => {
                 mode: 'TEST',
             });
 
-        if (testGenRes.status !== 201 || !testGenRes.body.data ? .attempt) {
+        if (testGenRes.status !== 201 || !testGenRes.body.data ?.attempt) {
             throw new Error(`STEP 5 Failed: Test generation failed: ${JSON.stringify(testGenRes.body)}`);
         }
 
@@ -212,7 +212,7 @@ const runLiveVerification = async() => {
             .get(`/api/tests/${testAttemptId}`)
             .set('Authorization', `Bearer ${studentToken}`);
 
-        if (getAttemptRes.status !== 200 || getAttemptRes.body.data ? .attempt ? .isSubmitted !== false) {
+        if (getAttemptRes.status !== 200 || getAttemptRes.body.data ?.attempt ?.isSubmitted !== false) {
             throw new Error(`STEP 5 Failed: Could not fetch active test attempt`);
         }
         for (const q of getAttemptRes.body.data.attempt.questions) {
@@ -265,7 +265,7 @@ const runLiveVerification = async() => {
             .get(`/api/tests/${testAttemptId}`)
             .set('Authorization', `Bearer ${studentToken}`);
 
-        if (reviewRes.status !== 200 || !reviewRes.body.data ? .attempt ? .isSubmitted) {
+        if (reviewRes.status !== 200 || !reviewRes.body.data ?.attempt ?.isSubmitted) {
             throw new Error(`STEP 7 Failed: Failed to fetch completed test review`);
         }
 
@@ -315,7 +315,7 @@ const runLiveVerification = async() => {
             .get('/api/tests/history')
             .set('Authorization', `Bearer ${studentToken}`);
 
-        if (historyRes.status !== 200 || !Array.isArray(historyRes.body.data ? .attempts)) {
+        if (historyRes.status !== 200 || !Array.isArray(historyRes.body.data ?.attempts)) {
             throw new Error(`STEP 9 Failed: Could not fetch test history`);
         }
 
