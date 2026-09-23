@@ -63,9 +63,6 @@ export default function Login() {
         <p className="text-sm text-slate-400 text-center mt-6">
           New to Studify? <Link to="/signup" className="text-blue-400">Create an account</Link>
         </p>
-        <p className="text-xs text-slate-500 text-center mt-3">
-          Demo login: demo@studify.app / Demo1234
-        </p>
       </div>
     </div>
   );

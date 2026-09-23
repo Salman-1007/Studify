@@ -50,6 +50,8 @@ model User {
   passwordHash   String
   educationLevel EducationLevel @default(OTHER)
   grade          String?
+  board          String?  @default("Punjab")
+  level          Int      @default(1)
   institution    String?
   avatarUrl      String?
   role           Role     @default(STUDENT)
@@ -74,6 +76,7 @@ model User {
   achievements        UserAchievement[]
   studySessions       StudySession[]
   topicPerformances   UserTopicPerformance[]
+  standardTestAttempts StandardTestAttempt[]
 }
 
 model RefreshToken {
@@ -372,4 +375,169 @@ model UserTopicPerformance {
 
   @@unique([userId, topic])
   @@index([userId])
+}
+
+enum QuestionStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum SourceType {
+  ORIGINAL
+  IMPORTED
+  AI_GENERATED
+}
+
+model Board {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  code        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  subjects    CurriculumSubject[]
+  questions   QuestionBankItem[]
+  testAttempts StandardTestAttempt[]
+}
+
+model CurriculumSubject {
+  id          String   @id @default(uuid())
+  boardId     String
+  board       Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  classGrade  String   // e.g. "9"
+  subjectName String   // e.g. "Physics"
+  bookName    String   // e.g. "Physics 9"
+  code        String?
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  chapters    CurriculumChapter[]
+  questions   QuestionBankItem[]
+  testAttempts StandardTestAttempt[]
+
+  @@unique([boardId, classGrade, subjectName])
+  @@index([boardId, classGrade])
+}
+
+model CurriculumChapter {
+  id            String   @id @default(uuid())
+  subjectId     String
+  subject       CurriculumSubject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  chapterNumber Int
+  chapterName   String
+  description   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  topics        CurriculumTopic[]
+  questions     QuestionBankItem[]
+  testAttempts  StandardTestAttempt[]
+
+  @@unique([subjectId, chapterNumber])
+  @@index([subjectId])
+}
+
+model CurriculumTopic {
+  id          String   @id @default(uuid())
+  chapterId   String
+  chapter     CurriculumChapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  topicName   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  questions   QuestionBankItem[]
+
+  @@unique([chapterId, topicName])
+  @@index([chapterId])
+}
+
+model QuestionBankItem {
+  id              String         @id @default(uuid())
+  boardId         String
+  board           Board          @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  classGrade      String         // e.g. "9"
+  subjectId       String
+  subject         CurriculumSubject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  chapterId       String
+  chapter         CurriculumChapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  topicId         String?
+  topic           CurriculumTopic?  @relation(fields: [topicId], references: [id], onDelete: SetNull)
+
+  questionText    String
+  normalizedText  String         // lowercased, stripped for duplicate detection
+
+  optionA         String
+  optionB         String
+  optionC         String
+  optionD         String
+  correctAnswer   String         // "A" | "B" | "C" | "D"
+  explanation     String?
+  difficulty      QuizDifficulty @default(MEDIUM)
+  status          QuestionStatus @default(PENDING_REVIEW)
+  questionType    QuestionType   @default(MCQ)
+
+  sourceType      SourceType     @default(ORIGINAL)
+  sourceReference String?
+
+  createdById     String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  testQuestions   StandardQuestionAttempt[]
+
+  @@index([boardId, classGrade, subjectId, chapterId, status])
+  @@index([status])
+  @@index([chapterId, normalizedText])
+}
+
+model StandardTestAttempt {
+  id               String   @id @default(uuid())
+  userId           String
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  boardId          String
+  board            Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  classGrade       String
+  subjectId        String
+  subject          CurriculumSubject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  chapterId        String
+  chapter          CurriculumChapter @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  questionCount    Int
+  difficulty       String   @default("MIXED")
+
+  score            Int      @default(0)
+  totalQuestions   Int
+  percentage       Float    @default(0)
+  correctCount     Int      @default(0)
+  wrongCount       Int      @default(0)
+  unansweredCount  Int      @default(0)
+  timeTakenSecs    Int      @default(0)
+
+  isSubmitted      Boolean  @default(false)
+  startedAt        DateTime @default(now())
+  submittedAt      DateTime?
+  createdAt        DateTime @default(now())
+
+  questionAttempts StandardQuestionAttempt[]
+
+  @@index([userId])
+  @@index([subjectId])
+}
+
+model StandardQuestionAttempt {
+  id               String               @id @default(uuid())
+  testAttemptId    String
+  testAttempt      StandardTestAttempt  @relation(fields: [testAttemptId], references: [id], onDelete: Cascade)
+  questionId       String
+  question         QuestionBankItem     @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  order            Int                  @default(0)
+  selectedOption   String?              // "A" | "B" | "C" | "D" or null
+  isCorrect        Boolean              @default(false)
+
+  @@index([testAttemptId])
 }

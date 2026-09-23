@@ -2,10 +2,13 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Sparkles, FolderOpen, ListChecks, Layers,
   Users, Compass, Trophy, LineChart, User, Settings, ShieldCheck,
+  BookOpen, History,
 } from 'lucide-react';
 
 const links = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/question-bank', label: 'Question Bank', icon: BookOpen },
+  { to: '/tests/history', label: 'Test History', icon: History },
   { to: '/mentor', label: 'AI Mentor', icon: Sparkles },
   { to: '/materials', label: 'My Materials', icon: FolderOpen },
   { to: '/quizzes', label: 'Quizzes', icon: ListChecks },
@@ -47,18 +50,34 @@ export default function Sidebar({ isAdmin, open, onClose }) {
             </NavLink>
           ))}
           {isAdmin && (
-            <NavLink
-              to="/admin"
-              onClick={onClose}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors mt-2 border-t border-slate-800 pt-4 ${
-                  isActive ? 'bg-amber-500/15 text-amber-400' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
-                }`
-              }
-            >
-              <ShieldCheck size={18} />
-              Admin
-            </NavLink>
+            <div className="mt-2 border-t border-slate-800 pt-3 flex flex-col gap-1">
+              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 py-1">Admin</span>
+              <NavLink
+                to="/admin"
+                end
+                onClick={onClose}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                    isActive ? 'bg-amber-500/15 text-amber-400' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
+                  }`
+                }
+              >
+                <ShieldCheck size={18} />
+                Overview
+              </NavLink>
+              <NavLink
+                to="/admin/questions"
+                onClick={onClose}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${
+                    isActive ? 'bg-amber-500/15 text-amber-400' : 'text-slate-400 hover:bg-slate-800 hover:text-slate-100'
+                  }`
+                }
+              >
+                <BookOpen size={18} />
+                Question Bank
+              </NavLink>
+            </div>
           )}
         </nav>
       </aside>

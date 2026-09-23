@@ -4,12 +4,17 @@ import { useAuth } from '../context/AuthContext.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 
 const initial = {
-  name: '', username: '', email: '', password: '', confirmPassword: '',
-  educationLevel: 'UNIVERSITY', grade: '', institution: '',
+  name: '',
+  email: '',
+  password: '',
+  confirmPassword: '',
+  class: '9',
+  board: 'Punjab',
+  institution: '',
 };
 
 export default function Signup() {
-  const { register, user, loading } = useAuth();
+  const { signup, user, loading } = useAuth();
   const { showToast } = useToast();
   const navigate = useNavigate();
   const [form, setForm] = useState(initial);
@@ -22,14 +27,19 @@ export default function Signup() {
 
   const onSubmit = async (e) => {
     e.preventDefault();
+    if (form.password !== form.confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
     setSubmitting(true);
     setError('');
     try {
-      await register(form);
+      await signup(form);
       showToast('Account created — welcome to Studify!', 'success');
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.message || 'Signup failed');
+      const msg = err.response?.data?.error?.message || err.response?.data?.message || 'Signup failed';
+      setError(msg);
     } finally {
       setSubmitting(false);
     }
@@ -43,61 +53,61 @@ export default function Signup() {
         <div className="text-center mb-8">
           <div className="w-10 h-10 rounded-lg bg-blue-500 mx-auto mb-3 flex items-center justify-center font-bold text-white">S</div>
           <h1 className="text-xl font-semibold text-white" style={{ fontFamily: 'Poppins' }}>Create your account</h1>
+          <p className="text-xs text-slate-400 mt-1">Join Studify for Classes 9–12</p>
         </div>
         <form onSubmit={onSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm text-slate-400 mb-1">Full name</label>
-              <input className={inputClass} value={form.name} onChange={update('name')} required />
-            </div>
-            <div>
-              <label className="block text-sm text-slate-400 mb-1">Username</label>
-              <input className={inputClass} value={form.username} onChange={update('username')} required />
-            </div>
+          <div>
+            <label className="block text-sm text-slate-400 mb-1">Full name</label>
+            <input className={inputClass} placeholder="e.g. Salman Adil" value={form.name} onChange={update('name')} required />
           </div>
           <div>
             <label className="block text-sm text-slate-400 mb-1">Email</label>
-            <input type="email" className={inputClass} value={form.email} onChange={update('email')} required />
+            <input type="email" className={inputClass} placeholder="name@example.com" value={form.email} onChange={update('email')} required />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm text-slate-400 mb-1">Password</label>
-              <input type="password" className={inputClass} value={form.password} onChange={update('password')} required />
+              <input type="password" className={inputClass} placeholder="Min 8 characters" value={form.password} onChange={update('password')} required />
             </div>
             <div>
               <label className="block text-sm text-slate-400 mb-1">Confirm password</label>
-              <input type="password" className={inputClass} value={form.confirmPassword} onChange={update('confirmPassword')} required />
+              <input type="password" className={inputClass} placeholder="Repeat password" value={form.confirmPassword} onChange={update('confirmPassword')} required />
             </div>
-          </div>
-          <div>
-            <label className="block text-sm text-slate-400 mb-1">Education level</label>
-            <select className={inputClass} value={form.educationLevel} onChange={update('educationLevel')}>
-              <option value="SCHOOL">School</option>
-              <option value="COLLEGE">College</option>
-              <option value="UNIVERSITY">University</option>
-              <option value="OTHER">Other</option>
-            </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm text-slate-400 mb-1">Class / grade (optional)</label>
-              <input className={inputClass} value={form.grade} onChange={update('grade')} />
+              <label className="block text-sm text-slate-400 mb-1">Class / Grade</label>
+              <select className={inputClass} value={form.class} onChange={update('class')} required>
+                <option value="9">Class 9 (Matric 1)</option>
+                <option value="10">Class 10 (Matric 2)</option>
+                <option value="11">Class 11 (FSc 1)</option>
+                <option value="12">Class 12 (FSc 2)</option>
+              </select>
             </div>
             <div>
-              <label className="block text-sm text-slate-400 mb-1">Institution (optional)</label>
-              <input className={inputClass} value={form.institution} onChange={update('institution')} />
+              <label className="block text-sm text-slate-400 mb-1">Educational Board</label>
+              <select className={inputClass} value={form.board} onChange={update('board')} required>
+                <option value="Punjab">Punjab Board</option>
+                <option value="Federal/FBISE">Federal (FBISE)</option>
+                <option value="Sindh">Sindh Board</option>
+                <option value="KPK">KPK Board</option>
+              </select>
             </div>
           </div>
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          <div>
+            <label className="block text-sm text-slate-400 mb-1">School / College (optional)</label>
+            <input className={inputClass} placeholder="e.g. Punjab Group of Colleges / Army Public School" value={form.institution} onChange={update('institution')} />
+          </div>
+          {error && <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg p-2.5">{error}</p>}
           <button
             disabled={submitting}
-            className="w-full bg-blue-500 hover:bg-blue-600 disabled:opacity-60 rounded-lg py-2.5 font-medium text-white"
+            className="w-full bg-blue-500 hover:bg-blue-600 disabled:opacity-60 rounded-lg py-2.5 font-medium text-white transition-colors"
           >
             {submitting ? 'Creating account…' : 'Create account'}
           </button>
         </form>
         <p className="text-sm text-slate-400 text-center mt-6">
-          Already have an account? <Link to="/login" className="text-blue-400">Log in</Link>
+          Already have an account? <Link to="/login" className="text-blue-400 hover:underline">Log in</Link>
         </p>
       </div>
     </div>

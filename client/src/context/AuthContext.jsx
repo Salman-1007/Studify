@@ -26,22 +26,34 @@ export const AuthProvider = ({ children }) => {
     const res = await api.post('/auth/login', { identifier, password });
     setAccessToken(res.data.data.accessToken);
     setUser(res.data.data.user);
+    return res.data.data;
+  };
+
+  const signup = async (payload) => {
+    const res = await api.post('/auth/signup', payload);
+    setAccessToken(res.data.data.accessToken);
+    setUser(res.data.data.user);
+    return res.data.data;
   };
 
   const register = async (payload) => {
     const res = await api.post('/auth/register', payload);
     setAccessToken(res.data.data.accessToken);
     setUser(res.data.data.user);
+    return res.data.data;
   };
 
   const logout = async () => {
-    await api.post('/auth/logout');
-    setAccessToken(null);
-    setUser(null);
+    try {
+      await api.post('/auth/logout');
+    } finally {
+      setAccessToken(null);
+      setUser(null);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, setUser, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, setUser, loading, login, signup, register, logout }}>
       {children}
     </AuthContext.Provider>
   );
