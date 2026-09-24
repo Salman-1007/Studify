@@ -1,6 +1,6 @@
-import { Menu, Bell, LogOut } from 'lucide-react';
+import { Menu, Bell, LogOut, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../context/AuthContext.jsx';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 
 export default function Topbar({ onMenuClick, notificationCount = 0 }) {
   const { user, logout } = useAuth();
@@ -19,7 +19,16 @@ export default function Topbar({ onMenuClick, notificationCount = 0 }) {
       <div className="hidden lg:block text-sm text-slate-400">
         {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
       </div>
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3 sm:gap-4">
+        {user?.role === 'ADMIN' && (
+          <Link
+            to="/admin"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-semibold hover:bg-rose-500/25 transition-all shadow-sm"
+          >
+            <ShieldCheck size={14} />
+            <span>Admin Panel</span>
+          </Link>
+        )}
         <div className="relative text-slate-400">
           <Bell size={20} />
           {notificationCount > 0 && (

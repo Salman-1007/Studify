@@ -77,6 +77,9 @@ model User {
   studySessions       StudySession[]
   topicPerformances   UserTopicPerformance[]
   standardTestAttempts StandardTestAttempt[]
+  directChatsAsUser1  DirectChat[]        @relation("DirectChatUser1")
+  directChatsAsUser2  DirectChat[]        @relation("DirectChatUser2")
+  sentDirectMessages  DirectMessage[]
 }
 
 model RefreshToken {
@@ -285,6 +288,8 @@ model GroupMessage {
   senderId  String
   sender    User       @relation(fields: [senderId], references: [id], onDelete: Cascade)
   content   String
+  isUnsent  Boolean    @default(false)
+  unsentAt  DateTime?
   createdAt DateTime   @default(now())
 
   @@index([groupId])
@@ -516,6 +521,11 @@ model StandardTestAttempt {
   wrongCount       Int      @default(0)
   unansweredCount  Int      @default(0)
   timeTakenSecs    Int      @default(0)
+  tabSwitchCount   Int      @default(0)
+  telemetry        Json?
+  chapterMastery   Json?
+  avgTimeSecs      Float?   @default(0)
+  aiDiagnostic     String?
 
   isSubmitted      Boolean  @default(false)
   startedAt        DateTime @default(now())
@@ -538,6 +548,61 @@ model StandardQuestionAttempt {
   order            Int                  @default(0)
   selectedOption   String?              // "A" | "B" | "C" | "D" or null
   isCorrect        Boolean              @default(false)
+  timeSpentSeconds Int                  @default(0)
+  isFlagged        Boolean              @default(false)
 
   @@index([testAttemptId])
+}
+
+enum ChatRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+model DirectChat {
+  id           String            @id @default(uuid())
+  user1Id      String
+  user1        User              @relation("DirectChatUser1", fields: [user1Id], references: [id], onDelete: Cascade)
+  user2Id      String
+  user2        User              @relation("DirectChatUser2", fields: [user2Id], references: [id], onDelete: Cascade)
+  status       ChatRequestStatus @default(PENDING)
+  initiatorId  String
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  messages     DirectMessage[]
+
+  @@unique([user1Id, user2Id])
+  @@index([user1Id])
+  @@index([user2Id])
+}
+
+model DirectMessage {
+  id         String     @id @default(uuid())
+  chatId     String
+  chat       DirectChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  senderId   String
+  sender     User       @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  content    String
+  isUnsent   Boolean    @default(false)
+  unsentAt   DateTime?
+  createdAt  DateTime   @default(now())
+
+  @@index([chatId])
+  @@index([senderId])
+}
+
+model QuestionPack {
+  id             String   @id @default(uuid())
+  title          String
+  description    String?
+  classGrade     String
+  subjectName    String
+  boardName      String   @default("Punjab")
+  totalQuestions Int      @default(0)
+  isPublished    Boolean  @default(true)
+  downloads      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 }

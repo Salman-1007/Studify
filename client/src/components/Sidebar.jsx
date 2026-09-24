@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Sparkles, FolderOpen, ListChecks, Layers,
   Users, Compass, Trophy, LineChart, User, Settings, ShieldCheck,
-  BookOpen, History,
+  BookOpen, History, MessageSquare,
 } from 'lucide-react';
 
 const links = [
@@ -10,11 +10,11 @@ const links = [
   { to: '/question-bank', label: 'Question Bank', icon: BookOpen },
   { to: '/tests/history', label: 'Test History', icon: History },
   { to: '/mentor', label: 'AI Mentor', icon: Sparkles },
+  { to: '/chat', label: '1-on-1 Chat', icon: MessageSquare },
   { to: '/materials', label: 'My Materials', icon: FolderOpen },
   { to: '/quizzes', label: 'Quizzes', icon: ListChecks },
   { to: '/flashcards', label: 'Flashcards', icon: Layers },
   { to: '/groups', label: 'Study Groups', icon: Users },
-  { to: '/groups', label: 'Discover', icon: Compass, exact: false },
   { to: '/leaderboard', label: 'Leaderboard', icon: Trophy },
   { to: '/progress', label: 'Progress', icon: LineChart },
   { to: '/profile', label: 'Profile', icon: User },

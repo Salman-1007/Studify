@@ -18,6 +18,9 @@ router.get('/:id/members', ctrl.listMembers);
 router.delete('/:id/members/:userId', ctrl.removeMember);
 router.patch('/:id/members/:userId/moderator', ctrl.setModerator);
 router.get('/:id/messages', ctrl.getMessages);
+router.post('/:id/messages', ctrl.sendMessage);
+router.delete('/:id/messages/:messageId', ctrl.unsendMessage);
+router.delete('/messages/:messageId', ctrl.unsendMessage);
 router.get('/:id/leaderboard', lb.groupLeaderboard);
 
 router.post('/:id/quizzes', gq.createGroupQuiz);

@@ -12,6 +12,11 @@ router.patch('/users/:id/deactivate', ctrl.deactivateUser);
 router.get('/groups', ctrl.listGroups);
 router.get('/stats', ctrl.platformStats);
 
+// Materials & Chat Audits
+router.get('/materials', ctrl.listMaterialsAudit);
+router.delete('/materials/:id', ctrl.deleteMaterial);
+router.get('/chats-audit', ctrl.listChatsAudit);
+
 // Canonical Question Bank Management
 router.get('/questions', qCtrl.listQuestions);
 router.get('/questions/:id', qCtrl.getQuestion);

@@ -1,8 +1,15 @@
 import * as groqProvider from '../providers/groqProvider.js';
 import * as customProvider from '../providers/customProvider.js';
+import * as geminiProvider from '../providers/geminiProvider.js';
 
-// Swapping providers (e.g. to the team's own AI models) is a one-line change here.
-const provider = process.env.AI_PROVIDER === 'custom' ? customProvider : groqProvider;
+// Dynamically select Gemini if GEMINI_API_KEY is present or AI_PROVIDER === 'gemini'
+export const getProvider = () => {
+  if (process.env.AI_PROVIDER === 'custom') return customProvider;
+  if (process.env.GEMINI_API_KEY || process.env.AI_PROVIDER === 'gemini') return geminiProvider;
+  return groqProvider;
+};
+
+const provider = getProvider();
 
 const extractJson = (raw) => {
   const cleaned = raw.replace(/```json|```/g, '').trim();
@@ -90,3 +97,60 @@ export const generateStudyPlan = async ({ weakTopics, subjects, availableHoursPe
   }];
   return withJsonRetry({ system, messages });
 };
+
+export const generateMistakeDiagnostic = async ({ testTitle, score, totalQuestions, percentage, mistakes }) => {
+  const system = [
+    'You are Studify\'s Senior Academic Tutor specialized in the Pakistani Board Examination Curriculum (Punjab Textbook Board / PECTAA / Federal Board).',
+    'Analyze the student\'s practice test mistakes and return ONLY a valid JSON object matching this schema:',
+    '{',
+    '  "headline": string,',
+    '  "summary": string,',
+    '  "keyMisconceptions": [',
+    '    {',
+    '      "topic": string,',
+    '      "studentConfusion": string,',
+    '      "ruleOrFact": string',
+    '    }',
+    '  ],',
+    '  "recommendedRevisionChapters": string[],',
+    '  "quickActionPlan": string',
+    '}',
+  ].join('\n');
+
+  const mistakesSummary = mistakes.slice(0, 10).map((m, idx) => `
+${idx + 1}. Question: "${m.questionText}"
+Student selected: [${m.selectedOption || 'Skipped'}]
+Correct answer: [${m.correctAnswer}]
+Explanation: ${m.explanation || 'None provided'}
+Chapter: ${m.chapterName || 'General'}
+`).join('\n');
+
+  const prompt = `Practice Test: "${testTitle || 'Board Chapter Test'}"
+Score: ${score}/${totalQuestions} (${percentage}%)
+Mistakes to diagnose:
+${mistakesSummary}
+
+Provide a deep, constructive diagnostic to help this matric student ace their upcoming board exam.`;
+
+  const messages = [{ role: 'user', content: prompt }];
+  const prov = getProvider();
+
+  try {
+    const raw = await prov.generateCompletion({ system, messages, jsonMode: true });
+    return extractJson(raw);
+  } catch (err) {
+    console.warn(`[AI Diagnostic] Diagnostic generation error: ${err.message}. Providing structured analysis.`);
+    return {
+      headline: percentage >= 80 ? 'Distinction level performance with minor gaps' : percentage >= 50 ? 'Solid passing foundation with targeted revisions needed' : 'Needs foundational review before test day',
+      summary: `You scored ${score}/${totalQuestions} (${percentage}%). Reviewing your ${mistakes.length} mistakes will directly help boost your board exam score.`,
+      keyMisconceptions: mistakes.slice(0, 3).map((m) => ({
+        topic: m.chapterName || 'Key Concepts',
+        studentConfusion: `Option [${m.selectedOption || 'Skipped'}] was selected instead of [${m.correctAnswer}].`,
+        ruleOrFact: m.explanation || 'Review textbook chapter definitions, solved examples, and summary formulas.',
+      })),
+      recommendedRevisionChapters: Array.from(new Set(mistakes.map((m) => m.chapterName).filter(Boolean))),
+      quickActionPlan: 'Re-read the bold definitions in your Punjab Textbook and retake this chapter test to confirm mastery.',
+    };
+  }
+};
+

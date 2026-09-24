@@ -43,6 +43,9 @@ const DEFAULTS = {
     questionBankItem: { difficulty: 'MEDIUM', status: 'PENDING_REVIEW', questionType: 'MCQ', sourceType: 'ORIGINAL' },
     standardTestAttempt: { score: 0, totalQuestions: 0, percentage: 0, correctCount: 0, wrongCount: 0, unansweredCount: 0, timeTakenSecs: 0, isSubmitted: false },
     standardQuestionAttempt: { isCorrect: false },
+    directChat: { status: 'PENDING' },
+    directMessage: { isUnsent: false },
+    questionPack: { downloads: 0, isPublished: true },
 };
 
 const NESTED_RELATIONS = {
@@ -76,6 +79,15 @@ const RELATIONS_MAP = {
     },
     questionAttempt: {
         question: { table: 'question', key: 'questionId', targetKey: 'id', single: true },
+    },
+    directChat: {
+        user1: { table: 'user', key: 'user1Id', targetKey: 'id', single: true },
+        user2: { table: 'user', key: 'user2Id', targetKey: 'id', single: true },
+        messages: { table: 'directMessage', key: 'id', targetKey: 'chatId', single: false },
+    },
+    directMessage: {
+        chat: { table: 'directChat', key: 'chatId', targetKey: 'id', single: true },
+        sender: { table: 'user', key: 'senderId', targetKey: 'id', single: true },
     },
 };
 
@@ -223,6 +235,7 @@ export const createFakePrisma = () => {
         'studySession', 'userTopicPerformance',
         'board', 'curriculumSubject', 'curriculumChapter', 'curriculumTopic',
         'questionBankItem', 'standardTestAttempt', 'standardQuestionAttempt',
+        'directChat', 'directMessage', 'questionPack',
     ];
 
     const prisma = {

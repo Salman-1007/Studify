@@ -7,6 +7,7 @@ import { requireAuth } from '../middleware/auth.js';
 const router = Router();
 router.use(requireAuth);
 router.get('/', ctrl.listQuizzes);
+router.post('/from-question-bank', ctrl.createQuizFromQuestionBank);
 router.get('/:id', ctrl.getQuiz);
 router.post('/:id/attempt', validate(submitAttemptSchema), ctrl.submitAttempt);
 export default router;

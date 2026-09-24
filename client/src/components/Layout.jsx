@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar.jsx';
 import Topbar from './Topbar.jsx';
+import ServerStatusBanner from './ServerStatusBanner.jsx';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api.js';
@@ -18,7 +19,8 @@ export default function Layout() {
   const unread = data?.filter((n) => !n.isRead).length || 0;
 
   return (
-    <div className="flex h-screen bg-[#0B1120] text-slate-100">
+    <div className="flex h-screen bg-[#0B1120] text-slate-100 relative">
+      <ServerStatusBanner />
       <Sidebar isAdmin={user?.role === 'ADMIN'} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
       <div className="flex-1 flex flex-col min-w-0">
         <Topbar onMenuClick={() => setSidebarOpen(true)} notificationCount={unread} />

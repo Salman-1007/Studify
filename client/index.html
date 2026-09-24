@@ -1,15 +1,69 @@
 <!doctype html>
 <html lang="en">
-  <head>
+
+<head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Studify — Your Intelligent Learning Companion</title>
+    <title>Studify — Pakistan's #1 EdTech Platform for Matric & Intermediate (Classes 9–12)</title>
+
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="Ace Punjab Textbook Board (PTB), Federal Board (FBISE), and matric exams with chapter-wise MCQs, timed test engines, AI mistake diagnostics, and peer study groups." />
+    <meta name="keywords" content="Studify, Matric Pakistan, Class 9 Physics, PTB MCQs, PECTAA, FBISE, Punjab Board, Educational App Pakistan, BISE Lahore, BISE Rawalpindi, Matric Test Preparation, Past Papers" />
+    <meta name="author" content="Studify EdTech" />
+    <meta name="robots" content="index, follow" />
+    <meta name="theme-color" content="#0B1120" />
+
+    <!-- OpenGraph / Facebook Meta Tags -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://studify-ochre.vercel.app/" />
+    <meta property="og:title" content="Studify — Smart Board Exam Preparation for Pakistani Students" />
+    <meta property="og:description" content="Master Punjab Textbook Board Class 9–12 subjects with verified MCQs, live peer study groups, and instant AI mistake diagnostics." />
+    <meta property="og:image" content="https://studify-ochre.vercel.app/og-image.png" />
+
+    <!-- Twitter Card Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://studify-ochre.vercel.app/" />
+    <meta name="twitter:title" content="Studify — Smart Board Exam Preparation for Pakistani Students" />
+    <meta name="twitter:description" content="Ace your PTB matric and intermediate board exams with verified MCQs, timed test simulations, and AI diagnostics." />
+    <meta name="twitter:image" content="https://studify-ochre.vercel.app/og-image.png" />
+
+    <!-- JSON-LD Educational Organization Schema -->
+    <script type="application/ld+json">
+        {
+            "@context": "https://schema.org",
+            "@type": "EducationalOrganization",
+            "name": "Studify",
+            "url": "https://studify-ochre.vercel.app/",
+            "logo": "https://studify-ochre.vercel.app/favicon.svg",
+            "description": "Comprehensive test-preparation and assessment platform designed for Pakistani matric and intermediate students following the Punjab Textbook Board (PTB) and Federal Board (FBISE) curricula.",
+            "audience": {
+                "@type": "EducationalAudience",
+                "educationalRole": "student",
+                "audienceType": "Matric and Intermediate students in Pakistan (Classes 9, 10, 11, 12)"
+            },
+            "educationalCredentialAwarded": "Matriculation (SSC) and Intermediate (HSSC) exam preparation",
+            "hasOfferCatalog": {
+                "@type": "OfferCatalog",
+                "name": "Curriculum Practice Banks",
+                "itemListElement": [{
+                    "@type": "Course",
+                    "name": "Class 9 Physics (Punjab Textbook Board)",
+                    "description": "Chapter-wise multiple choice questions with verified board answers, explanations, and AI diagnostics."
+                }]
+            }
+        }
+    </script>
+
+    <!-- Typography & Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
-  </head>
-  <body>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@500;600;700;800&display=swap" rel="stylesheet">
+</head>
+
+<body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
-  </body>
+</body>
+
 </html>

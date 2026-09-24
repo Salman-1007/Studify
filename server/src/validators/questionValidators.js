@@ -130,11 +130,41 @@ export const createTestSchema = z.object({
 });
 
 export const submitTestSchema = z.object({
+    testId: z.string().optional(),
+    attemptId: z.string().optional(),
     answers: z.array(
         z.object({
             questionId: z.string().min(1, 'questionId is required'),
             selectedOption: z.string().optional().nullable(),
+            timeSpentSeconds: z.coerce.number().int().min(0).optional(),
+            isFlagged: z.boolean().optional(),
         })
-    ).default([]),
-    timeTakenSecs: z.coerce.number().int().min(0).default(0),
+    ).optional(),
+    responses: z.array(
+        z.object({
+            questionId: z.string().min(1, 'questionId is required'),
+            selectedOption: z.string().optional().nullable(),
+            timeSpentSeconds: z.coerce.number().int().min(0).optional(),
+            isFlagged: z.boolean().optional(),
+        })
+    ).optional(),
+    durationSeconds: z.coerce.number().int().min(0).optional(),
+    timeTakenSecs: z.coerce.number().int().min(0).optional(),
+    tabSwitchCount: z.coerce.number().int().min(0).optional(),
+    telemetry: z.any().optional(),
+}).transform((data) => {
+    const rawAnswers = data.responses || data.answers || [];
+    const answers = rawAnswers.map((a) => ({
+        questionId: a.questionId,
+        selectedOption: a.selectedOption ? a.selectedOption.trim().toUpperCase() : null,
+        timeSpentSeconds: a.timeSpentSeconds || 0,
+        isFlagged: Boolean(a.isFlagged),
+    }));
+    const timeTaken = data.durationSeconds !== undefined ? data.durationSeconds : (data.timeTakenSecs || 0);
+    return {
+        ...data,
+        answers,
+        timeTakenSecs: timeTaken,
+        tabSwitchCount: data.tabSwitchCount || 0,
+    };
 });

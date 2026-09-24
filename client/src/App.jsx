@@ -30,6 +30,9 @@ import AdminQuestions from './pages/AdminQuestions.jsx';
 import StudentQuestionBank from './pages/StudentQuestionBank.jsx';
 import StandardTestTake from './pages/StandardTestTake.jsx';
 import StandardTestResult from './pages/StandardTestResult.jsx';
+import TestSession from './pages/TestSession.jsx';
+import TestResults from './pages/TestResults.jsx';
+import DirectChat from './pages/DirectChat.jsx';
 import TestHistory from './pages/TestHistory.jsx';
 import NotFound from './pages/NotFound.jsx';
 import Landing from './pages/Landing.jsx';
@@ -46,13 +49,17 @@ export default function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/mentor" element={<Mentor />} />
           <Route path="/mentor/:conversationId" element={<Mentor />} />
+          <Route path="/chat" element={<DirectChat />} />
+          <Route path="/direct-chat" element={<DirectChat />} />
           <Route path="/materials" element={<Materials />} />
           <Route path="/materials/:id" element={<MaterialDetail />} />
           <Route path="/question-bank" element={<StudentQuestionBank />} />
           <Route path="/tests" element={<StudentQuestionBank />} />
           <Route path="/tests/history" element={<TestHistory />} />
-          <Route path="/tests/:attemptId" element={<StandardTestTake />} />
-          <Route path="/tests/:attemptId/results" element={<StandardTestResult />} />
+          <Route path="/tests/:attemptId" element={<TestSession />} />
+          <Route path="/test-session/:attemptId" element={<TestSession />} />
+          <Route path="/tests/:attemptId/results" element={<TestResults />} />
+          <Route path="/test-results/:attemptId" element={<TestResults />} />
           <Route path="/quizzes" element={<Quizzes />} />
           <Route path="/quizzes/create" element={<QuizCreate />} />
           <Route path="/quizzes/:id" element={<QuizTake />} />

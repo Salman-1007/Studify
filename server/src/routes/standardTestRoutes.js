@@ -7,7 +7,9 @@ router.use(requireAuth);
 
 router.post('/', ctrl.generateTest);
 router.get('/history', ctrl.getTestHistory);
+router.post('/submit', ctrl.submitTest);
 router.get('/:attemptId', ctrl.getTestAttempt);
 router.post('/:attemptId/submit', ctrl.submitTest);
+router.post('/:attemptId/ai-diagnostic', ctrl.getAiDiagnostic);
 
 export default router;

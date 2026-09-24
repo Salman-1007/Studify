@@ -23,6 +23,9 @@ import adminRoutes from './routes/adminRoutes.js';
 import healthRoutes from './routes/healthRoutes.js';
 import curriculumRoutes from './routes/curriculumRoutes.js';
 import standardTestRoutes from './routes/standardTestRoutes.js';
+import directChatRoutes from './routes/directChatRoutes.js';
+import questionPackRoutes from './routes/questionPackRoutes.js';
+import { memoryCache } from './utils/cache.js';
 import { notFound, errorHandler } from './middleware/errorHandler.js';
 import { registerGroupChat } from './sockets/groupChat.js';
 
@@ -93,12 +96,14 @@ export const createApp = () => {
     app.use('/api/materials', materialRoutes);
     app.use('/api/ai', aiRoutes);
     app.use('/api/conversations', conversationRoutes);
-    app.use('/api/curriculum', curriculumRoutes);
+    app.use('/api/curriculum', memoryCache.middleware('curriculum', 600), curriculumRoutes);
     app.use('/api/tests', standardTestRoutes);
     app.use('/api/quizzes', quizRoutes);
     app.use('/api/quiz-attempts', quizAttemptRoutes);
     app.use('/api/flashcards', flashcardRoutes);
     app.use('/api/groups', groupRoutes);
+    app.use('/api/direct-chats', directChatRoutes);
+    app.use('/api/question-packs', questionPackRoutes);
     app.use('/api/leaderboard', leaderboardRoutes);
     app.use('/api/progress', progressRoutes);
     app.use('/api/notifications', notificationRoutes);

@@ -7,39 +7,138 @@ import { saveLocalFile } from '../services/storageService.js';
 import { SUPPORTED_CLASSES, SUPPORTED_BOARDS } from '../validators/authValidators.js';
 
 export const getProfile = asyncHandler(async(req, res) => {
-    const [quizAttempts, achievements, groups, weakTopics] = await Promise.all([
-        prisma.quizAttempt.findMany({ where: { userId: req.user.id } }),
+    const [user, standardAttempts, quizAttempts, achievements, groups, allTopicPerf, deckCount, reviewCount] = await Promise.all([
+        prisma.user.findUnique({ where: { id: req.user.id } }),
+        prisma.standardTestAttempt.findMany({
+            where: { userId: req.user.id, isSubmitted: true },
+            include: { subject: true, chapter: true },
+            orderBy: { submittedAt: 'desc' },
+        }),
+        prisma.quizAttempt.findMany({
+            where: { userId: req.user.id },
+            include: { quiz: true },
+            orderBy: { createdAt: 'desc' },
+        }),
         prisma.userAchievement.findMany({ where: { userId: req.user.id }, include: { achievement: true } }),
         prisma.groupMember.findMany({ where: { userId: req.user.id }, include: { group: true } }),
-        prisma.userTopicPerformance.findMany({ where: { userId: req.user.id, isWeak: true } }),
+        prisma.userTopicPerformance.findMany({ where: { userId: req.user.id }, orderBy: { totalCount: 'desc' } }),
+        prisma.flashcardDeck.count({ where: { userId: req.user.id } }),
+        prisma.flashcardReview.count({ where: { flashcard: { deck: { userId: req.user.id } } } }),
     ]);
-    const quizzesCompleted = quizAttempts.length;
-    const avgAccuracy = quizzesCompleted ?
-        quizAttempts.reduce((sum, a) => sum + a.percentage, 0) / quizzesCompleted :
+
+    if (!user) throw new ApiError(404, 'User not found');
+
+    const standardTestsCount = standardAttempts.length;
+    const customQuizzesCount = quizAttempts.length;
+    const quizzesCompleted = standardTestsCount + customQuizzesCount;
+
+    const totalQuestionsAttempted =
+        standardAttempts.reduce((sum, a) => sum + (a.totalQuestions || 0), 0) +
+        quizAttempts.reduce((sum, a) => sum + (a.totalQuestions || 0), 0);
+
+    const totalQuestionsCorrect =
+        standardAttempts.reduce((sum, a) => sum + (a.score || 0), 0) +
+        quizAttempts.reduce((sum, a) => sum + (a.score || 0), 0);
+
+    const avgAccuracy = totalQuestionsAttempted > 0 ?
+        Math.round((totalQuestionsCorrect / totalQuestionsAttempted) * 100) :
         0;
+
+    // Dynamic Level Calculation from Total XP (Points)
+    const points = user.points || 0;
+    const dynamicLevel = Math.max(1, Math.floor(points / 100) + 1);
+    const levelProgress = points % 100;
+    const xpToNextLevel = 100 - levelProgress;
+
+    // Dynamic Weak Topics (accuracy < 60% with at least 1 mistake or flagged isWeak)
+    const weakTopics = allTopicPerf
+        .filter((t) => t.isWeak || (t.totalCount >= 1 && (t.correctCount / t.totalCount) < 0.6))
+        .map((t) => ({
+            topic: t.topic,
+            subject: t.subject || 'Physics',
+            correctCount: t.correctCount,
+            totalCount: t.totalCount,
+            accuracy: t.totalCount > 0 ? Math.round((t.correctCount / t.totalCount) * 100) : 0,
+        }));
+
+    // Dynamic Mastered Topics (accuracy >= 80% with at least 2 attempts)
+    const masteredTopics = allTopicPerf
+        .filter((t) => t.totalCount >= 2 && (t.correctCount / t.totalCount) >= 0.8)
+        .map((t) => ({
+            topic: t.topic,
+            subject: t.subject || 'Physics',
+            correctCount: t.correctCount,
+            totalCount: t.totalCount,
+            accuracy: Math.round((t.correctCount / t.totalCount) * 100),
+        }));
+
+    // Recent combined activity (Standard Tests + Custom Quizzes)
+    const recentStandard = standardAttempts.slice(0, 5).map((a) => {
+        const subjName = a.subject?.bookName || a.subject?.subjectName;
+        const chapName = a.chapter?.chapterName || 'Chapter Test';
+        return {
+            id: a.id,
+            title: subjName ? `${subjName} - ${chapName}` : 'Practice Test',
+            score: a.score,
+            totalQuestions: a.totalQuestions,
+            percentage: Math.round(a.percentage),
+            date: a.submittedAt || a.createdAt,
+            type: 'Standard Test',
+            url: `/tests/${a.id}/results`,
+        };
+    });
+
+    const recentQuizzes = quizAttempts.slice(0, 5).map((a) => ({
+        id: a.id,
+        title: a.quiz?.title || 'Practice Quiz',
+        score: a.score,
+        totalQuestions: a.totalQuestions,
+        percentage: Math.round(a.percentage),
+        date: a.createdAt,
+        type: 'Quiz',
+        url: `/quizzes/${a.quizId}/results`,
+    }));
+
+    const recentActivity = [...recentStandard, ...recentQuizzes]
+        .sort((a, b) => new Date(b.date) - new Date(a.date))
+        .slice(0, 5);
 
     ok(res, {
         user: {
-            id: req.user.id,
-            name: req.user.name,
-            username: req.user.username,
-            email: req.user.email,
-            educationLevel: req.user.educationLevel,
-            grade: req.user.grade,
-            class: req.user.grade,
-            board: req.user.board || 'Punjab',
-            level: req.user.level || 1,
-            xp: req.user.points || 0,
-            points: req.user.points || 0,
-            streak: req.user.streakCount || 0,
-            streakCount: req.user.streakCount || 0,
-            institution: req.user.institution,
-            avatarUrl: req.user.avatarUrl,
+            id: user.id,
+            name: user.name,
+            username: user.username,
+            email: user.email,
+            educationLevel: user.educationLevel,
+            grade: user.grade,
+            class: user.grade,
+            board: user.board || 'Punjab',
+            level: dynamicLevel,
+            xp: points,
+            points,
+            streak: user.streakCount || 0,
+            streakCount: user.streakCount || 0,
+            institution: user.institution,
+            avatarUrl: user.avatarUrl,
         },
-        stats: { quizzesCompleted, avgAccuracy: Math.round(avgAccuracy) },
+        stats: {
+            quizzesCompleted,
+            standardTestsCount,
+            customQuizzesCount,
+            totalQuestionsAttempted,
+            totalQuestionsCorrect,
+            avgAccuracy,
+            flashcardDecksCount: deckCount,
+            flashcardReviewsCount: reviewCount,
+            dynamicLevel,
+            levelProgress,
+            xpToNextLevel,
+        },
         achievements: achievements.map((a) => a.achievement),
         groups: groups.map((g) => g.group),
-        weakTopics: weakTopics.map((w) => w.topic),
+        weakTopics,
+        masteredTopics,
+        recentActivity,
     });
 });
 

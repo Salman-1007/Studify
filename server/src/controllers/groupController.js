@@ -116,7 +116,58 @@ export const getMessages = asyncHandler(async (req, res) => {
     ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
     include: { sender: { select: { id: true, name: true, username: true, avatarUrl: true } } },
   });
-  ok(res, { messages: messages.reverse() });
+  const sanitized = messages.map((m) => ({
+    ...m,
+    content: m.isUnsent ? 'This message was unsent' : m.content,
+  }));
+  ok(res, { messages: sanitized.reverse() });
+});
+
+export const sendMessage = asyncHandler(async (req, res) => {
+  await requireMembership(req.params.id, req.user.id);
+  const { content } = req.body;
+  if (!content || !content.trim()) throw new ApiError(400, 'Content cannot be empty');
+
+  const message = await prisma.groupMessage.create({
+    data: {
+      groupId: req.params.id,
+      senderId: req.user.id,
+      content: content.trim(),
+    },
+    include: { sender: { select: { id: true, name: true, username: true, avatarUrl: true } } },
+  });
+
+  ok(res, { message }, 201);
+});
+
+export const unsendMessage = asyncHandler(async (req, res) => {
+  const { messageId } = req.params;
+  const message = await prisma.groupMessage.findUnique({
+    where: { id: messageId },
+    include: { group: true },
+  });
+  if (!message) throw new ApiError(404, 'Message not found');
+
+  if (
+    message.senderId !== req.user.id &&
+    message.group.ownerId !== req.user.id &&
+    req.user.role !== 'ADMIN'
+  ) {
+    throw new ApiError(403, 'Unauthorized to unsend this message');
+  }
+
+  const updated = await prisma.groupMessage.update({
+    where: { id: messageId },
+    data: {
+      isUnsent: true,
+      unsentAt: new Date(),
+      content: 'This message was unsent',
+    },
+    include: { sender: { select: { id: true, name: true, username: true, avatarUrl: true } } },
+  });
+
+  ok(res, { message: updated });
 });
 
 export { requireMembership };
+

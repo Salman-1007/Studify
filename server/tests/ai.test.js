@@ -19,6 +19,13 @@ beforeAll(async () => {
     }),
     generateFlashcards: jest.fn(async () => ({ cards: [{ front: 'Q', back: 'A' }] })),
     generateStudyPlan: jest.fn(async () => ({ plan: [] })),
+    generateMistakeDiagnostic: jest.fn(async () => ({
+      headline: 'Mocked diagnostic headline',
+      summary: 'Mocked diagnostic summary',
+      keyMisconceptions: [],
+      recommendedRevisionChapters: ['Kinematics'],
+      quickActionPlan: 'Review textbook definitions',
+    })),
   }));
   ({ app } = await buildTestApp());
   const res = await request(app).post('/api/auth/register').send({
