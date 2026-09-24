@@ -3,7 +3,7 @@ import * as groqProvider from './groqProvider.js';
 let activeModel = null;
 
 const getCandidateModels = () => {
-    const preferredModel = (process.env.GEMINI_MODEL || 'gemini-3.8-flash').replace(/^models\//, '');
+    const preferredModel = (process.env.GEMINI_MODEL || 'gemini-3.6-flash').replace(/^models\//, '');
     const fallbackList = ['gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
     if (activeModel) {
         return Array.from(new Set([activeModel, preferredModel, ...fallbackList]));
@@ -74,7 +74,7 @@ export const generateCompletion = async({ system, messages, jsonMode = false }) 
 
             const data = await res.json();
             const candidate = data.candidates ?.[0];
-            const textPart = candidate ?.content ?.parts ? .[0] ?.text;
+            const textPart = candidate ?.content ?.parts ?.[0] ?.text;
 
             if (!textPart) {
                 throw new Error('Gemini returned an empty candidate text');
