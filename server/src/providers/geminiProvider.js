@@ -73,8 +73,8 @@ export const generateCompletion = async({ system, messages, jsonMode = false }) 
             }
 
             const data = await res.json();
-            const candidate = data.candidates?.[0];
-            const textPart = candidate?.content?.parts?.[0]?.text;
+            const candidate = data.candidates ?.[0];
+            const textPart = candidate ?.content ?.parts ? .[0] ?.text;
 
             if (!textPart) {
                 throw new Error('Gemini returned an empty candidate text');
