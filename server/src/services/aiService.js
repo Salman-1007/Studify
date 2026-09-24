@@ -9,8 +9,6 @@ export const getProvider = () => {
   return groqProvider;
 };
 
-const provider = getProvider();
-
 const extractJson = (raw) => {
   const cleaned = raw.replace(/```json|```/g, '').trim();
   const start = cleaned.indexOf('{');
@@ -26,9 +24,10 @@ const extractJson = (raw) => {
 
 const withJsonRetry = async ({ system, messages }) => {
   let lastErr;
+  const prov = getProvider();
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const raw = await provider.generateCompletion({ system, messages, jsonMode: true });
+      const raw = await prov.generateCompletion({ system, messages, jsonMode: true });
       return extractJson(raw);
     } catch (err) {
       lastErr = err;
@@ -51,13 +50,20 @@ export const generateChatResponse = async ({ history, message, materialContext, 
     { role: 'user', content: message },
   ];
 
-  return provider.generateCompletion({ system, messages });
+  const prov = getProvider();
+  try {
+    return await prov.generateCompletion({ system, messages });
+  } catch (err) {
+    console.error(`[AI Chat Service] AI generation failed: ${err.message}`);
+    return `Hello! I am your Studify AI Tutor. I'm currently having trouble connecting to the AI language model (Details: ${err.message?.slice(0, 90)}). Please ensure a valid \`GEMINI_API_KEY\` or \`GROQ_API_KEY\` is configured in your hosting environment settings. In the meantime, you can explore the Punjab Textbook Board chapters and practice tests directly in the Question Bank!`;
+  }
 };
 
 export const generateSummary = async ({ text, title }) => {
   const system = 'You are an educational summarizer. Given study material, produce: a concise summary, a bullet list of key points, and a bullet list of important definitions. Respond in Markdown with headings "## Summary", "## Key Points", "## Definitions".';
   const messages = [{ role: 'user', content: `Material title: ${title || 'Untitled'}\n\n${text.slice(0, 12000)}` }];
-  return provider.generateCompletion({ system, messages });
+  const prov = getProvider();
+  return prov.generateCompletion({ system, messages });
 };
 
 export const generateQuiz = async ({ topic, subject, difficulty, numQuestions, materialText }) => {
