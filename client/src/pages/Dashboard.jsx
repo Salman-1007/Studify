@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import Skeleton from '../components/Skeleton.jsx';
-import { Flame, Clock, Target, Users, Sparkles, ListChecks, Zap, BookOpen } from 'lucide-react';
+import { Flame, Clock, Target, Users, Sparkles, ListChecks, Zap, BookOpen, ChevronRight } from 'lucide-react';
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -33,11 +33,12 @@ export default function Dashboard() {
   }
 
   const streak = progress.streakCount ?? user?.streak ?? user?.streakCount ?? 0;
-  const xp = user?.xp ?? user?.points ?? 0;
+  const xp = progress.xp ?? user?.xp ?? user?.points ?? 0;
+  const dynamicLevel = progress.level ?? user?.level ?? 1;
   const quizzesCompleted = progress.quizzesCompleted ?? 0;
   const avgAccuracy = progress.avgAccuracy ?? 0;
   const totalStudyMinutes = progress.totalStudyMinutes ?? 0;
-  const weakTopics = progress.weakTopics || [];
+  const weakTopics = progress.weakTopicsDetails?.length ? progress.weakTopicsDetails : (progress.weakTopics || []);
   const recentAttempts = progress.recentAttempts || [];
   const studentClass = user?.class || user?.grade || '9';
   const studentBoard = user?.board || 'Punjab Board';
@@ -51,7 +52,7 @@ export default function Dashboard() {
             {greeting}, {user?.name?.split(' ')[0] || 'Student'} 👋
           </h1>
           <p className="text-slate-400 text-sm mt-1">
-            Studifying for <span className="text-slate-200 font-medium">Class {studentClass}</span> ({studentBoard}) · Level {user?.level || 1}
+            Studifying for <span className="text-slate-200 font-medium">Class {studentClass}</span> ({studentBoard}) · Level {dynamicLevel}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -72,24 +73,40 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={Flame} label="Study streak" value={`${streak} day${streak === 1 ? '' : 's'}`} accent="text-amber-400" />
         <StatCard icon={Clock} label="Study time" value={formatMinutes(totalStudyMinutes)} accent="text-blue-400" />
-        <StatCard icon={Target} label="Quiz accuracy" value={`${avgAccuracy}%`} accent="text-emerald-400" />
-        <StatCard icon={ListChecks} label="Quizzes completed" value={quizzesCompleted} accent="text-blue-400" />
+        <StatCard icon={Target} label="Test accuracy" value={`${avgAccuracy}%`} accent="text-emerald-400" />
+        <StatCard icon={ListChecks} label="Tests completed" value={quizzesCompleted} accent="text-blue-400" />
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Weak Areas */}
         <div className="lg:col-span-2 rounded-xl border border-slate-800 bg-slate-900/40 p-5">
-          <h2 className="font-medium text-slate-200 mb-3">Weak areas</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-medium text-slate-200">Weak areas & focus drills</h2>
+            <Link to="/question-bank" className="text-xs text-blue-400 hover:underline">Browse Bank</Link>
+          </div>
           {weakTopics.length === 0 ? (
-            <p className="text-sm text-slate-400">No weak topics detected yet — take quizzes so Studify can pinpoint areas to improve.</p>
+            <p className="text-sm text-slate-400">No weak topics detected yet — complete practice tests so Studify can pinpoint areas to improve.</p>
           ) : (
             <ul className="space-y-2">
-              {weakTopics.map((t) => (
-                <li key={t} className="flex items-center justify-between bg-slate-900 rounded-lg px-3 py-2 text-sm">
-                  <span>{t}</span>
-                  <Link to="/quizzes/create" className="text-blue-400 text-xs hover:underline">Practice</Link>
-                </li>
-              ))}
+              {weakTopics.slice(0, 5).map((t) => {
+                const topicName = typeof t === 'string' ? t : t.topic;
+                const accuracy = typeof t === 'object' ? t.accuracy : null;
+                return (
+                  <li key={topicName} className="flex items-center justify-between bg-slate-900 rounded-lg px-3.5 py-2.5 text-sm border border-slate-800/80">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-slate-200">{topicName}</span>
+                      {accuracy !== null && (
+                        <span className="text-[10px] text-rose-400 font-semibold bg-rose-500/10 px-2 py-0.5 rounded">
+                          {accuracy}% accuracy
+                        </span>
+                      )}
+                    </div>
+                    <Link to="/question-bank" className="text-blue-400 hover:text-blue-300 text-xs font-medium flex items-center gap-1">
+                      Practice Drill <ChevronRight size={12} />
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>
@@ -117,15 +134,29 @@ export default function Dashboard() {
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Recent Attempts */}
         <div className="rounded-xl border border-slate-800 bg-slate-900/40 p-5">
-          <h2 className="font-medium text-slate-200 mb-3">Recent quiz attempts</h2>
+          <h2 className="font-medium text-slate-200 mb-3">Recent test & quiz attempts</h2>
           {recentAttempts.length === 0 ? (
             <p className="text-sm text-slate-400">No attempts yet. Your completed tests will appear here.</p>
           ) : (
             <ul className="divide-y divide-slate-800">
               {recentAttempts.slice(0, 5).map((a) => (
                 <li key={a.id} className="py-2.5 flex items-center justify-between text-sm">
-                  <span>{a.quiz?.title || 'Quiz'}</span>
-                  <span className="text-slate-400">{Math.round(a.percentage)}%</span>
+                  <div className="flex flex-col">
+                    <Link to={a.url || `/quizzes/${a.id}`} className="text-slate-200 hover:text-blue-400 font-medium transition-colors">
+                      {a.title || a.quiz?.title || 'Practice Test'}
+                    </Link>
+                    <span className="text-[11px] text-slate-500">
+                      {a.type || 'Test'} · {a.date ? new Date(a.date).toLocaleDateString() : 'Recent'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                      (a.percentage ?? 0) >= 80 ? 'bg-emerald-500/10 text-emerald-400' :
+                      (a.percentage ?? 0) >= 50 ? 'bg-blue-500/10 text-blue-400' : 'bg-rose-500/10 text-rose-400'
+                    }`}>
+                      {Math.round(a.percentage ?? 0)}%
+                    </span>
+                  </div>
                 </li>
               ))}
             </ul>

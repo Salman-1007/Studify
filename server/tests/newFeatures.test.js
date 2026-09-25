@@ -262,3 +262,55 @@ describe('Enhanced Test Submission & AI Diagnostic', () => {
   });
 });
 
+describe('Dynamic Dashboard Progress Analytics', () => {
+  it('aggregates tests, accuracy, study minutes, and weak topics', async () => {
+    const res = await request(app)
+      .get('/api/progress')
+      .set('Authorization', `Bearer ${student1Token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.quizzesCompleted).toBeDefined();
+    expect(res.body.data.avgAccuracy).toBeDefined();
+    expect(res.body.data.totalStudyMinutes).toBeDefined();
+    expect(Array.isArray(res.body.data.recentAttempts)).toBe(true);
+  });
+});
+
+describe('Group Quiz Open Member Initiation & End Announcement', () => {
+  let gqTestId, hostedGqId;
+
+  it('allows any group member to initiate and host a group quiz', async () => {
+    // Student 2 is a standard MEMBER, not owner
+    const quizRes = await request(app)
+      .post('/api/quizzes/from-question-bank')
+      .set('Authorization', `Bearer ${student1Token}`)
+      .send({ chapterId, count: 2, title: 'Group Member Quiz' });
+
+    gqTestId = quizRes.body.data.quiz.id;
+
+    const hostRes = await request(app)
+      .post(`/api/groups/${groupId}/quizzes`)
+      .set('Authorization', `Bearer ${student2Token}`) // student2 is MEMBER
+      .send({
+        quizId: gqTestId,
+        durationMinutes: 10,
+      });
+
+    expect(hostRes.status).toBe(201);
+    expect(hostRes.body.data.groupQuiz).toBeDefined();
+    hostedGqId = hostRes.body.data.groupQuiz.id;
+  });
+
+  it('allows member to end quiz and announce results', async () => {
+    const endRes = await request(app)
+      .post(`/api/groups/${groupId}/quizzes/${hostedGqId}/end`)
+      .set('Authorization', `Bearer ${student2Token}`);
+
+    expect(endRes.status).toBe(200);
+    expect(endRes.body.data.groupQuiz.status).toBe('completed');
+    expect(endRes.body.data.announcement).toContain('Group Quiz');
+    expect(endRes.body.data.podium).toBeDefined();
+  });
+});
+
+

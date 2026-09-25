@@ -89,6 +89,15 @@ const RELATIONS_MAP = {
         chat: { table: 'directChat', key: 'chatId', targetKey: 'id', single: true },
         sender: { table: 'user', key: 'senderId', targetKey: 'id', single: true },
     },
+    groupQuiz: {
+        quiz: { table: 'quiz', key: 'quizId', targetKey: 'id', single: true },
+        group: { table: 'studyGroup', key: 'groupId', targetKey: 'id', single: true },
+        participants: { table: 'groupQuizParticipant', key: 'id', targetKey: 'groupQuizId', single: false },
+    },
+    groupQuizParticipant: {
+        groupQuiz: { table: 'groupQuiz', key: 'groupQuizId', targetKey: 'id', single: true },
+        user: { table: 'user', key: 'userId', targetKey: 'id', single: true },
+    },
 };
 
 const attachIncludes = (name, row, include, get) => {

@@ -16,7 +16,7 @@ const setRefreshCookie = (res, token) => {
         secure: isProduction,
         sameSite: isProduction ? 'none' : 'lax',
         maxAge: REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000,
-        path: '/api/auth',
+        path: '/',
     });
 };
 
@@ -57,7 +57,7 @@ export const signup = asyncHandler(async(req, res) => {
     if (existingEmail) throw new ApiError(409, 'Email is already in use');
 
     const assignedGrade = String(grade || classVal || '9');
-    let finalUsername = username ?.trim();
+    let finalUsername = username?.trim();
     if (!finalUsername) {
         const base = normalizedEmail.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '') || 'student';
         let candidate = base;
@@ -97,7 +97,7 @@ export const signup = asyncHandler(async(req, res) => {
 
     const { accessToken, refreshToken } = await issueTokens(user.id);
     setRefreshCookie(res, refreshToken);
-    ok(res, { user: publicUser(user), accessToken }, 201);
+    ok(res, { user: publicUser(user), accessToken, refreshToken }, 201);
 });
 
 export const register = asyncHandler(async(req, res) => {
@@ -125,7 +125,7 @@ export const register = asyncHandler(async(req, res) => {
 
     const { accessToken, refreshToken } = await issueTokens(user.id);
     setRefreshCookie(res, refreshToken);
-    ok(res, { user: publicUser(user), accessToken }, 201);
+    ok(res, { user: publicUser(user), accessToken, refreshToken }, 201);
 });
 
 export const login = asyncHandler(async(req, res) => {
@@ -146,12 +146,12 @@ export const login = asyncHandler(async(req, res) => {
 
     const { accessToken, refreshToken } = await issueTokens(user.id);
     setRefreshCookie(res, refreshToken);
-    ok(res, { user: publicUser(user), accessToken });
+    ok(res, { user: publicUser(user), accessToken, refreshToken });
 });
 
 export const refresh = asyncHandler(async(req, res) => {
-    const token = req.cookies ?.[REFRESH_COOKIE];
-    if (!token) throw new ApiError(401, 'No refresh token');
+    const token = req.cookies?.[REFRESH_COOKIE] || req.body?.refreshToken || req.headers['x-refresh-token'];
+    if (!token) throw new ApiError(401, 'No refresh token provided');
 
     const stored = await prisma.refreshToken.findUnique({ where: { token } });
     if (!stored || stored.revoked || stored.expiresAt < new Date()) {
@@ -161,11 +161,11 @@ export const refresh = asyncHandler(async(req, res) => {
     await prisma.refreshToken.update({ where: { token }, data: { revoked: true } });
     const { accessToken, refreshToken } = await issueTokens(stored.userId);
     setRefreshCookie(res, refreshToken);
-    ok(res, { accessToken });
+    ok(res, { accessToken, refreshToken });
 });
 
 export const logout = asyncHandler(async(req, res) => {
-    const token = req.cookies ?.[REFRESH_COOKIE];
+    const token = req.cookies?.[REFRESH_COOKIE] || req.body?.refreshToken || req.headers['x-refresh-token'];
     if (token) {
         await prisma.refreshToken.updateMany({ where: { token }, data: { revoked: true } });
     }
@@ -173,7 +173,7 @@ export const logout = asyncHandler(async(req, res) => {
         httpOnly: true,
         secure: isProduction,
         sameSite: isProduction ? 'none' : 'lax',
-        path: '/api/auth',
+        path: '/',
     });
     ok(res, { loggedOut: true });
 });

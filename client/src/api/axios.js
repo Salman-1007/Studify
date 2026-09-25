@@ -10,11 +10,33 @@ export const api = axios.create({
     timeout: 18000, // 18s before network abort to capture cold starts
 });
 
-let accessToken = null;
+let accessToken = typeof window !== 'undefined' ? localStorage.getItem('studify_access_token') : null;
+let refreshToken = typeof window !== 'undefined' ? localStorage.getItem('studify_refresh_token') : null;
+
 export const setAccessToken = (token) => {
     accessToken = token;
+    if (typeof window !== 'undefined') {
+        if (token) {
+            localStorage.setItem('studify_access_token', token);
+        } else {
+            localStorage.removeItem('studify_access_token');
+        }
+    }
 };
-export const getAccessToken = () => accessToken;
+
+export const setRefreshToken = (token) => {
+    refreshToken = token;
+    if (typeof window !== 'undefined') {
+        if (token) {
+            localStorage.setItem('studify_refresh_token', token);
+        } else {
+            localStorage.removeItem('studify_refresh_token');
+        }
+    }
+};
+
+export const getAccessToken = () => accessToken || (typeof window !== 'undefined' ? localStorage.getItem('studify_access_token') : null);
+export const getRefreshToken = () => refreshToken || (typeof window !== 'undefined' ? localStorage.getItem('studify_refresh_token') : null);
 
 // 1. Request Interceptor: Auth token & Cold Start timer detection
 api.interceptors.request.use((config) => {
@@ -39,7 +61,7 @@ let refreshPromise = null;
 
 api.interceptors.response.use(
     (response) => {
-        if (response.config ?._coldStartTimer) {
+        if (response.config?._coldStartTimer) {
             clearTimeout(response.config._coldStartTimer);
         }
         // Mark server successfully connected
@@ -48,7 +70,7 @@ api.interceptors.response.use(
     },
     async(error) => {
         const original = error.config;
-        if (original ?._coldStartTimer) {
+        if (original?._coldStartTimer) {
             clearTimeout(original._coldStartTimer);
         }
 
@@ -92,16 +114,20 @@ api.interceptors.response.use(
         ) {
             original._retry = true;
             try {
-                refreshPromise ||= api.post('/auth/refresh');
+                const storedRefresh = getRefreshToken();
+                refreshPromise ||= api.post('/auth/refresh', storedRefresh ? { refreshToken: storedRefresh } : {});
                 const res = await refreshPromise;
                 refreshPromise = null;
-                setAccessToken(res.data.data.accessToken);
-                original.headers.Authorization = `Bearer ${res.data.data.accessToken}`;
+                const newAccess = res.data.data.accessToken;
+                const newRefresh = res.data.data.refreshToken;
+                setAccessToken(newAccess);
+                if (newRefresh) setRefreshToken(newRefresh);
+                original.headers.Authorization = `Bearer ${newAccess}`;
                 return api(original);
             } catch (err) {
                 refreshPromise = null;
                 setAccessToken(null);
-                window.location.href = '/login';
+                setRefreshToken(null);
                 return Promise.reject(err);
             }
         }

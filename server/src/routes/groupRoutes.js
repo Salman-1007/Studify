@@ -28,5 +28,6 @@ router.get('/:id/quizzes', gq.listGroupQuizzes);
 router.post('/:id/quizzes/:groupQuizId/start', gq.startGroupQuiz);
 router.post('/:id/quizzes/:groupQuizId/join', gq.joinGroupQuiz);
 router.post('/:id/quizzes/:groupQuizId/submit', gq.submitGroupQuiz);
+router.post('/:id/quizzes/:groupQuizId/end', gq.endGroupQuiz);
 router.get('/:id/quizzes/:groupQuizId/leaderboard', lb.quizLeaderboard);
 export default router;
