@@ -76,12 +76,14 @@ export default function Signup() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-sm text-slate-400 mb-1">Class / Grade</label>
+              <label className="block text-sm text-slate-400 mb-1">Target Class / Exam Goal</label>
               <select className={inputClass} value={form.class} onChange={update('class')} required>
                 <option value="9">Class 9 (Matric 1)</option>
                 <option value="10">Class 10 (Matric 2)</option>
                 <option value="11">Class 11 (FSc 1)</option>
                 <option value="12">Class 12 (FSc 2)</option>
+                <option value="MDCAT">MDCAT (Pre-Medical Entry Test)</option>
+                <option value="ECAT">ECAT (Engineering Entry Test)</option>
               </select>
             </div>
             <div>

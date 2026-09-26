@@ -2,11 +2,12 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Sparkles, FolderOpen, ListChecks, Layers,
   Users, Compass, Trophy, LineChart, User, Settings, ShieldCheck,
-  BookOpen, History, MessageSquare,
+  BookOpen, History, MessageSquare, Flame,
 } from 'lucide-react';
 
 const links = [
   { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { to: '/daily-arena', label: 'Daily Mock Arena', icon: Flame, isHot: true },
   { to: '/question-bank', label: 'Question Bank', icon: BookOpen },
   { to: '/tests/history', label: 'Test History', icon: History },
   { to: '/mentor', label: 'AI Mentor', icon: Sparkles },
@@ -46,7 +47,12 @@ export default function Sidebar({ isAdmin, open, onClose }) {
               }
             >
               <Icon size={18} />
-              {label}
+              <span className="flex-1">{label}</span>
+              {isHot && (
+                <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30">
+                  Daily
+                </span>
+              )}
             </NavLink>
           ))}
           {isAdmin && (

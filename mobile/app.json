@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "Studify",
+    "slug": "studify",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "scheme": "studify",
+    "splash": {
+      "backgroundColor": "#0A0F1E"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.studify.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0A0F1E"
+      },
+      "package": "com.studify.app",
+      "permissions": [
+        "NOTIFICATIONS",
+        "INTERNET"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#3B82F6",
+          "sounds": []
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": ""
+      }
+    }
+  }
+}

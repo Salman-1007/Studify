@@ -73,9 +73,9 @@ export const getProgress = asyncHandler(async(req, res) => {
 
     const recentStandard = standardAttempts.slice(0, 5).map((a) => ({
         id: a.id,
-        title: a.subject?.bookName || a.subject?.subjectName
-            ? `${a.subject.bookName || a.subject.subjectName} - ${a.chapter?.chapterName || 'Chapter Test'}`
-            : 'Practice Test',
+        title: a.subject?.bookName || a.subject?.subjectName ?
+            `${a.subject.bookName || a.subject.subjectName} - ${a.chapter?.chapterName || 'Chapter Test'}` :
+            'Practice Test',
         score: a.score,
         totalQuestions: a.totalQuestions,
         percentage: Math.round(a.percentage || 0),

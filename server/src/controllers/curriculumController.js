@@ -24,11 +24,17 @@ export const getClasses = asyncHandler(async(req, res) => {
         where,
         select: { classGrade: true },
         distinct: ['classGrade'],
-        orderBy: { classGrade: 'asc' },
     });
 
-    const classes = subjects.map((s) => s.classGrade);
-    ok(res, { classes: classes.length > 0 ? classes : ['9'] });
+    const canonicalOrder = ['9', '10', '11', '12', 'MDCAT', 'ECAT'];
+    const foundClasses = new Set(subjects.map((s) => s.classGrade));
+    // Always include canonical tracks or any in database
+    const ordered = canonicalOrder.filter((c) => foundClasses.has(c) || ['9', '10', '11', '12', 'MDCAT', 'ECAT'].includes(c));
+    for (const c of foundClasses) {
+        if (!ordered.includes(c)) ordered.push(c);
+    }
+
+    ok(res, { classes: ordered.length > 0 ? ordered : ['9', '10', '11', '12', 'MDCAT', 'ECAT'] });
 });
 
 export const getSubjects = asyncHandler(async(req, res) => {

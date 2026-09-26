@@ -59,8 +59,15 @@ const NESTED_RELATIONS = {
 const RELATIONS_MAP = {
     curriculumChapter: {
         subject: { table: 'curriculumSubject', key: 'subjectId', targetKey: 'id', single: true },
+        questions: { table: 'questionBankItem', key: 'id', targetKey: 'chapterId', single: false },
     },
     curriculumSubject: {
+        board: { table: 'board', key: 'boardId', targetKey: 'id', single: true },
+        chapters: { table: 'curriculumChapter', key: 'id', targetKey: 'subjectId', single: false },
+    },
+    questionBankItem: {
+        subject: { table: 'curriculumSubject', key: 'subjectId', targetKey: 'id', single: true },
+        chapter: { table: 'curriculumChapter', key: 'chapterId', targetKey: 'id', single: true },
         board: { table: 'board', key: 'boardId', targetKey: 'id', single: true },
     },
     standardTestAttempt: {
@@ -68,6 +75,7 @@ const RELATIONS_MAP = {
         board: { table: 'board', key: 'boardId', targetKey: 'id', single: true },
         subject: { table: 'curriculumSubject', key: 'subjectId', targetKey: 'id', single: true },
         chapter: { table: 'curriculumChapter', key: 'chapterId', targetKey: 'id', single: true },
+        user: { table: 'user', key: 'userId', targetKey: 'id', single: true },
     },
     standardQuestionAttempt: {
         question: { table: 'questionBankItem', key: 'questionId', targetKey: 'id', single: true },
@@ -88,15 +96,6 @@ const RELATIONS_MAP = {
     directMessage: {
         chat: { table: 'directChat', key: 'chatId', targetKey: 'id', single: true },
         sender: { table: 'user', key: 'senderId', targetKey: 'id', single: true },
-    },
-    groupQuiz: {
-        quiz: { table: 'quiz', key: 'quizId', targetKey: 'id', single: true },
-        group: { table: 'studyGroup', key: 'groupId', targetKey: 'id', single: true },
-        participants: { table: 'groupQuizParticipant', key: 'id', targetKey: 'groupQuizId', single: false },
-    },
-    groupQuizParticipant: {
-        groupQuiz: { table: 'groupQuiz', key: 'groupQuizId', targetKey: 'id', single: true },
-        user: { table: 'user', key: 'userId', targetKey: 'id', single: true },
     },
 };
 

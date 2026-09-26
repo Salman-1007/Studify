@@ -18,3 +18,19 @@ export const markRead = asyncHandler(async (req, res) => {
   const updated = await prisma.notification.update({ where: { id: req.params.id }, data: { isRead: true } });
   ok(res, { notification: updated });
 });
+
+export const registerPushToken = asyncHandler(async (req, res) => {
+  const { token, platform = 'android' } = req.body;
+  if (!token) throw new ApiError(400, 'Push token is required');
+
+  await prisma.notification.create({
+    data: {
+      userId: req.user.id,
+      type: 'PUSH_TOKEN_REGISTERED',
+      message: JSON.stringify({ token, platform, registeredAt: new Date() }),
+      isRead: true,
+    },
+  });
+
+  ok(res, { registered: true, platform });
+});
