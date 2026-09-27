@@ -211,9 +211,13 @@ export default function AdminQuestions() {
             }}
             className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-blue-500"
           >
-            <option value="">All Classes</option>
+            <option value="">All Tracks / Classes</option>
             <option value="9">Class 9</option>
             <option value="10">Class 10</option>
+            <option value="11">Class 11</option>
+            <option value="12">Class 12</option>
+            <option value="MDCAT">MDCAT (Medical)</option>
+            <option value="ECAT">ECAT (Engineering)</option>
           </select>
         </div>
 

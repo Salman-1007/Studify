@@ -41,6 +41,11 @@ export default function Dashboard() {
   const recentAttempts = progress.recentAttempts || [];
   const studentClass = user?.class || user?.grade || '9';
   const studentBoard = user?.board || 'Punjab Board';
+  const syllabusLabel = studentClass.toUpperCase().includes('MDCAT')
+    ? 'MDCAT'
+    : studentClass.toUpperCase().includes('ECAT')
+    ? 'ECAT'
+    : `Class ${studentClass}`;
 
   return (
     <div className="space-y-8">
@@ -51,7 +56,7 @@ export default function Dashboard() {
             {greeting}, {user?.name?.split(' ')[0] || 'Student'} 👋
           </h1>
           <p className="text-slate-400 text-sm mt-1">
-            Studifying for <span className="text-slate-200 font-medium">Class {studentClass}</span> ({studentBoard}) · Level {user?.level || 1}
+            Studifying for <span className="text-slate-200 font-medium">{syllabusLabel}</span> ({studentBoard}) · Level {user?.level || 1}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -80,16 +85,24 @@ export default function Dashboard() {
             </div>
             <h3 className="text-lg font-bold text-white">Daily Mock Exam Challenge</h3>
             <p className="text-xs text-slate-400 mt-0.5 max-w-lg">
-              Synchronized daily questions across Class 9–12, MDCAT & ECAT. Maintain your {streak}-day study streak!
+              Today&apos;s synchronized daily challenge tailored for <span className="text-orange-300 font-medium">{syllabusLabel}</span> ({studentBoard}). Maintain your {streak}-day study streak!
             </p>
           </div>
         </div>
-        <Link
-          to="/daily-arena"
-          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-semibold text-xs transition-all shadow-md shadow-orange-500/20 self-start md:self-auto shrink-0"
-        >
-          <Play size={15} fill="currentColor" /> Enter Daily Arena
-        </Link>
+        <div className="flex items-center gap-2.5 self-start md:self-auto shrink-0">
+          <Link
+            to={`/daily-arena?track=${studentClass}&auto=true`}
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-semibold text-xs transition-all shadow-md shadow-orange-500/20"
+          >
+            <Play size={15} fill="currentColor" /> Start Daily Mock ({syllabusLabel})
+          </Link>
+          <Link
+            to={`/daily-arena?track=${studentClass}`}
+            className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-medium text-xs border border-slate-700 transition-all"
+          >
+            Customize
+          </Link>
+        </div>
       </div>
 
       {/* Main Stats Grid */}

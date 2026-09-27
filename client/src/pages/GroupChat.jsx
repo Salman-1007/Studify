@@ -126,7 +126,8 @@ export default function GroupChat() {
           )}
 
           {messages.map((m) => {
-            const isMine = m.senderId === user?.id || m.sender?.id === user?.id;
+            const currentUserId = user?.id || user?._id;
+            const isMine = Boolean(currentUserId && (m.senderId === currentUserId || m.sender?.id === currentUserId));
             const canUnsend = (isMine || isOwnerOrAdmin) && !m.isUnsent;
 
             return (
@@ -134,12 +135,12 @@ export default function GroupChat() {
                 key={m.id}
                 className={`flex items-end gap-2 group ${isMine ? 'justify-end' : 'justify-start'}`}
               >
-                {/* Unsend button */}
-                {canUnsend && (
+                {/* Unsend button (visible on hover or tap) */}
+                {isMine && canUnsend && (
                   <button
                     type="button"
                     onClick={() => handleUnsend(m.id)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-slate-800/80 cursor-pointer"
+                    className="opacity-40 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800/80 cursor-pointer"
                     title="Unsend for everyone"
                   >
                     <Trash2 size={13} />
@@ -176,6 +177,18 @@ export default function GroupChat() {
                     {m.isUnsent && <span className="ml-1 text-slate-400">• Unsent</span>}
                   </div>
                 </div>
+
+                {/* Admin moderation unsend button */}
+                {!isMine && isOwnerOrAdmin && canUnsend && (
+                  <button
+                    type="button"
+                    onClick={() => handleUnsend(m.id)}
+                    className="opacity-40 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800/80 cursor-pointer"
+                    title="Moderate: Unsend for everyone"
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                )}
               </div>
             );
           })}

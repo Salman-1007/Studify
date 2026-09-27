@@ -59,7 +59,7 @@ export const getProgress = asyncHandler(async(req, res) => {
         bySubject[key].totalPercentage += a.percentage;
     }
     for (const sa of standardAttempts) {
-        const key = sa.subject ?.subjectName || 'Physics';
+        const key = sa.subject?.subjectName || 'Physics';
         if (!bySubject[key]) bySubject[key] = { subject: key, attempts: 0, totalPercentage: 0 };
         bySubject[key].attempts += 1;
         bySubject[key].totalPercentage += sa.percentage;
@@ -73,7 +73,7 @@ export const getProgress = asyncHandler(async(req, res) => {
 
     const recentStandard = standardAttempts.slice(0, 5).map((a) => ({
         id: a.id,
-        title: a.subject ?.bookName || a.subject ?.subjectName ?
+        title: a.subject?.bookName || a.subject?.subjectName ?
             `${a.subject.bookName || a.subject.subjectName} - ${a.chapter?.chapterName || 'Chapter Test'}` :
             'Practice Test',
         score: a.score,
@@ -86,7 +86,7 @@ export const getProgress = asyncHandler(async(req, res) => {
 
     const recentQuizzes = attempts.slice(0, 5).map((a) => ({
         id: a.id,
-        title: a.quiz ?.title || 'Practice Quiz',
+        title: a.quiz?.title || 'Practice Quiz',
         score: a.score,
         totalQuestions: a.totalQuestions,
         percentage: Math.round(a.percentage || 0),
@@ -99,9 +99,9 @@ export const getProgress = asyncHandler(async(req, res) => {
         .sort((a, b) => new Date(b.date) - new Date(a.date))
         .slice(0, 6);
 
-    const points = user ?.points ?? req.user.points ?? 0;
+    const points = user?.points ?? req.user.points ?? 0;
     const dynamicLevel = Math.floor(points / 100) + 1;
-    const streakCount = user ?.streakCount ?? req.user.streakCount ?? 0;
+    const streakCount = user?.streakCount ?? req.user.streakCount ?? 0;
 
     ok(res, {
         quizzesCompleted: totalQuizzes,
