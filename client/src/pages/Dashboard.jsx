@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import Skeleton from '../components/Skeleton.jsx';
-import { Flame, Clock, Target, Users, Sparkles, ListChecks, Zap, BookOpen } from 'lucide-react';
+import { Flame, Clock, Target, Users, Sparkles, ListChecks, Zap, BookOpen, Play } from 'lucide-react';
 
 export default function Dashboard() {
   const { user } = useAuth();
