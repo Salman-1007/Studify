@@ -52,6 +52,7 @@ export default function DailyArena() {
   const [searchParams] = useSearchParams();
 
   const queryTrack = searchParams.get('track');
+  const autoStart = searchParams.get('auto') === 'true';
 
   // Arena Config States
   const [selectedTrack, setSelectedTrack] = useState(() => queryTrack || user?.class || user?.grade || '9');
@@ -59,6 +60,7 @@ export default function DailyArena() {
   const [selectedSubjectIds, setSelectedSubjectIds] = useState([]);
   const [questionCount, setQuestionCount] = useState(10);
   const [activeTab, setActiveTab] = useState('arena'); // 'arena' | 'leaderboard'
+  const autoStartedRef = useRef(false);
 
   // Test Runner States
   const [session, setSession] = useState(null);
@@ -211,6 +213,14 @@ export default function DailyArena() {
       setSelectedTrack(queryTrack);
     }
   }, [queryTrack]);
+
+  // Auto-start daily challenge if auto=true
+  useEffect(() => {
+    if (autoStart && !autoStartedRef.current && !session && !result) {
+      autoStartedRef.current = true;
+      handleStartArena(queryTrack || selectedTrack);
+    }
+  }, [autoStart, queryTrack, selectedTrack, session, result]);
 
   const handleSelectOption = (questionId, optionKey) => {
     setAnswers((prev) => ({
@@ -829,14 +839,12 @@ export default function DailyArena() {
             </div>
 
             <button
-              onClick={() => handleStartArena()}
+              onClick={handleStartArena}
               disabled={submitting}
-              className="py-3 px-8 rounded-xl bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20 cursor-pointer transition-all"
+              className="py-3 px-8 rounded-xl bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 cursor-pointer transition-all"
             >
               <Play size={18} fill="currentColor" />
-              {submitting
-                ? 'Preparing Daily Arena…'
-                : `Start Daily Mock (${selectedTrack.toUpperCase().includes('MDCAT') ? 'MDCAT' : selectedTrack.toUpperCase().includes('ECAT') ? 'ECAT' : `Class ${selectedTrack}`})`}
+              {submitting ? 'Preparing Daily Arena…' : 'Enter Daily Arena'}
             </button>
           </div>
         </div>
