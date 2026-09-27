@@ -91,16 +91,10 @@ export default function Dashboard() {
         </div>
         <div className="flex items-center gap-2.5 self-start md:self-auto shrink-0">
           <Link
-            to={`/daily-arena?track=${studentClass}&auto=true`}
+            to={`/daily-arena?track=${studentClass}`}
             className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-semibold text-xs transition-all shadow-md shadow-orange-500/20"
           >
-            <Play size={15} fill="currentColor" /> Start Daily Mock ({syllabusLabel})
-          </Link>
-          <Link
-            to={`/daily-arena?track=${studentClass}`}
-            className="inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white font-medium text-xs border border-slate-700 transition-all"
-          >
-            Customize
+            <Play size={15} fill="currentColor" /> Enter Daily Mock ({syllabusLabel})
           </Link>
         </div>
       </div>

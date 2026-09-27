@@ -68,7 +68,7 @@ api.interceptors.response.use(
         serverStatus.markConnected();
         return response;
     },
-    async(error) => {
+    async (error) => {
         const original = error.config;
         if (original?._coldStartTimer) {
             clearTimeout(original._coldStartTimer);
