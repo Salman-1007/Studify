@@ -35,25 +35,14 @@ export default function StudentQuestionBank() {
     }
   }, [boards, selectedBoardId]);
 
-  // 1b. Fetch dynamic classes/tracks
-  const { data: availableClasses = ['9', '10', '11', '12', 'MDCAT', 'ECAT'] } = useQuery({
-    queryKey: ['curriculum-classes'],
-    queryFn: () => api.get('/curriculum/classes').then((r) => r.data.data.classes),
-  });
-
-  // 2. Fetch Subjects for Selected Grade/Track
-  const isEntryTest = selectedGrade === 'MDCAT' || selectedGrade === 'ECAT';
+  // 2. Fetch Subjects for Board & Selected Grade
   const { data: subjects, isLoading: loadingSubjects } = useQuery({
     queryKey: ['curriculum-subjects', selectedBoardId, selectedGrade],
     queryFn: () =>
       api
-        .get('/curriculum/subjects', {
-          params: {
-            boardId: isEntryTest ? undefined : selectedBoardId,
-            classGrade: selectedGrade,
-          },
-        })
+        .get('/curriculum/subjects', { params: { boardId: selectedBoardId, gradeLevel: selectedGrade } })
         .then((r) => r.data.data.subjects),
+    enabled: !!selectedBoardId,
   });
 
   // Automatically select first subject when subjects load or change
@@ -164,9 +153,9 @@ export default function StudentQuestionBank() {
       {/* Class & Subject Selector Bar */}
       <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
         <div className="flex flex-wrap items-center gap-3">
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Track / Grade:</span>
-          <div className="flex flex-wrap items-center gap-1.5 bg-slate-800/80 p-1 rounded-xl border border-slate-700/60">
-            {availableClasses.map((grade) => (
+          <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Class:</span>
+          <div className="flex items-center gap-1.5 bg-slate-800/80 p-1 rounded-xl border border-slate-700/60">
+            {['9', '10'].map((grade) => (
               <button
                 key={grade}
                 type="button"
@@ -181,7 +170,7 @@ export default function StudentQuestionBank() {
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
-                {grade === 'MDCAT' ? 'MDCAT (Medical)' : grade === 'ECAT' ? 'ECAT (Engg)' : `Class ${grade}`}
+                Class {grade}
               </button>
             ))}
           </div>

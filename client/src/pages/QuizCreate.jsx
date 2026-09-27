@@ -37,10 +37,11 @@ export default function QuizCreate() {
 
   const boardId = boards?.[0]?.id;
 
-  // Query subjects across all curriculum tracks
+  // Query subjects
   const { data: subjects, isLoading: loadingSubjects } = useQuery({
-    queryKey: ['curriculum-subjects-all'],
-    queryFn: () => api.get('/curriculum/subjects').then((r) => r.data.data.subjects),
+    queryKey: ['curriculum-subjects', boardId],
+    queryFn: () => api.get('/curriculum/subjects', { params: { boardId, gradeLevel: '9' } }).then((r) => r.data.data.subjects),
+    enabled: !!boardId,
   });
 
   useEffect(() => {
@@ -198,7 +199,7 @@ export default function QuizCreate() {
             >
               {subjects?.map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.bookName || s.subjectName} ({s.classGrade === 'MDCAT' ? 'MDCAT' : s.classGrade === 'ECAT' ? 'ECAT' : `Class ${s.classGrade}`})
+                  {s.bookName || s.subjectName} (Class {s.classGrade})
                 </option>
               ))}
             </select>

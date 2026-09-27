@@ -39,7 +39,7 @@ let refreshPromise = null;
 
 api.interceptors.response.use(
     (response) => {
-        if (response.config?._coldStartTimer) {
+        if (response.config ?._coldStartTimer) {
             clearTimeout(response.config._coldStartTimer);
         }
         // Mark server successfully connected
@@ -48,14 +48,14 @@ api.interceptors.response.use(
     },
     async(error) => {
         const original = error.config;
-        if (original?._coldStartTimer) {
+        if (original ?._coldStartTimer) {
             clearTimeout(original._coldStartTimer);
         }
 
         const isNetworkOrTimeout =
             error.code === 'ECONNABORTED' ||
-            error.message?.includes('timeout') ||
-            error.message?.includes('Network Error') ||
+            error.message ?.includes('timeout') ||
+            error.message ?.includes('Network Error') ||
             !error.response;
 
         const isServerWaking =
@@ -85,10 +85,10 @@ api.interceptors.response.use(
 
         // Handle 401 Session Token Refresh
         if (
-            error.response?.status === 401 &&
+            error.response ?.status === 401 &&
             original &&
             !original._retry &&
-            !original.url?.includes('/auth/')
+            !original.url ?.includes('/auth/')
         ) {
             original._retry = true;
             try {
