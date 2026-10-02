@@ -73,24 +73,20 @@ export const getProfile = asyncHandler(async(req, res) => {
         }));
 
     // Recent combined activity (Standard Tests + Custom Quizzes)
-    const recentStandard = standardAttempts.slice(0, 5).map((a) => {
-        const subjName = a.subject?.bookName || a.subject?.subjectName;
-        const chapName = a.chapter?.chapterName || 'Chapter Test';
-        return {
-            id: a.id,
-            title: subjName ? `${subjName} - ${chapName}` : 'Practice Test',
-            score: a.score,
-            totalQuestions: a.totalQuestions,
-            percentage: Math.round(a.percentage),
-            date: a.submittedAt || a.createdAt,
-            type: 'Standard Test',
-            url: `/tests/${a.id}/results`,
-        };
-    });
+    const recentStandard = standardAttempts.slice(0, 5).map((a) => ({
+        id: a.id,
+        title: a.subject ?.bookName || a.subject ?.subjectName ? `${a.subject.bookName || a.subject.subjectName} - ${a.chapter?.chapterName || 'Chapter Test'}` : 'Practice Test',
+        score: a.score,
+        totalQuestions: a.totalQuestions,
+        percentage: Math.round(a.percentage),
+        date: a.submittedAt || a.createdAt,
+        type: 'Standard Test',
+        url: `/tests/${a.id}/results`,
+    }));
 
     const recentQuizzes = quizAttempts.slice(0, 5).map((a) => ({
         id: a.id,
-        title: a.quiz?.title || 'Practice Quiz',
+        title: a.quiz ?.title || 'Practice Quiz',
         score: a.score,
         totalQuestions: a.totalQuestions,
         percentage: Math.round(a.percentage),

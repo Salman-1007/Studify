@@ -4,7 +4,7 @@ import { prisma } from '../config/db.js';
 export const registerGroupChat = (io) => {
     io.use(async(socket, next) => {
         try {
-            const token = socket.handshake.auth?.token;
+            const token = socket.handshake.auth ?.token;
             if (!token) return next(new Error('Not authenticated'));
             const payload = verifyAccessToken(token);
             const user = await prisma.user.findUnique({ where: { id: payload.sub } });
@@ -25,12 +25,9 @@ export const registerGroupChat = (io) => {
             const membership = await prisma.groupMember.findUnique({
                 where: { groupId_userId: { groupId, userId: socket.user.id } },
             });
-            if (!membership) {
-                if (typeof cb === 'function') cb({ success: false, message: 'Not a member of this group' });
-                return;
-            }
+            if (!membership) return cb ?.({ success: false, message: 'Not a member of this group' });
             socket.join(`group:${groupId}`);
-            if (typeof cb === 'function') cb({ success: true });
+            cb ?.({ success: true });
         });
 
         socket.on('group:message', async({ groupId, content }, cb) => {
@@ -38,23 +35,17 @@ export const registerGroupChat = (io) => {
                 const membership = await prisma.groupMember.findUnique({
                     where: { groupId_userId: { groupId, userId: socket.user.id } },
                 });
-                if (!membership) {
-                    if (typeof cb === 'function') cb({ success: false, message: 'Not a member of this group' });
-                    return;
-                }
-                if (!content || !content.trim()) {
-                    if (typeof cb === 'function') cb({ success: false, message: 'Empty message' });
-                    return;
-                }
+                if (!membership) return cb ?.({ success: false, message: 'Not a member of this group' });
+                if (!content || !content.trim()) return cb ?.({ success: false, message: 'Empty message' });
 
                 const message = await prisma.groupMessage.create({
                     data: { groupId, senderId: socket.user.id, content: content.trim() },
                     include: { sender: { select: { id: true, name: true, username: true, avatarUrl: true } } },
                 });
                 io.to(`group:${groupId}`).emit('group:message', message);
-                if (typeof cb === 'function') cb({ success: true, message });
+                cb ?.({ success: true, message });
             } catch (err) {
-                if (typeof cb === 'function') cb({ success: false, message: 'Failed to send message' });
+                cb ?.({ success: false, message: 'Failed to send message' });
             }
         });
 
@@ -65,16 +56,14 @@ export const registerGroupChat = (io) => {
                     include: { group: true },
                 });
                 if (!msg || msg.groupId !== groupId) {
-                    if (typeof cb === 'function') cb({ success: false, message: 'Message not found' });
-                    return;
+                    return cb ?.({ success: false, message: 'Message not found' });
                 }
                 if (
                     msg.senderId !== socket.user.id &&
                     msg.group.ownerId !== socket.user.id &&
                     socket.user.role !== 'ADMIN'
                 ) {
-                    if (typeof cb === 'function') cb({ success: false, message: 'Not authorized to unsend' });
-                    return;
+                    return cb ?.({ success: false, message: 'Not authorized to unsend' });
                 }
 
                 const updated = await prisma.groupMessage.update({
@@ -91,9 +80,9 @@ export const registerGroupChat = (io) => {
                     messageId,
                     message: updated,
                 });
-                if (typeof cb === 'function') cb({ success: true, message: updated });
+                cb ?.({ success: true, message: updated });
             } catch (err) {
-                if (typeof cb === 'function') cb({ success: false, message: 'Failed to unsend message' });
+                cb ?.({ success: false, message: 'Failed to unsend message' });
             }
         });
 
@@ -102,13 +91,12 @@ export const registerGroupChat = (io) => {
             try {
                 const chat = await prisma.directChat.findUnique({ where: { id: chatId } });
                 if (!chat || (chat.user1Id !== socket.user.id && chat.user2Id !== socket.user.id && socket.user.role !== 'ADMIN')) {
-                    if (typeof cb === 'function') cb({ success: false, message: 'Not authorized for this chat' });
-                    return;
+                    return cb ?.({ success: false, message: 'Not authorized for this chat' });
                 }
                 socket.join(`direct:${chatId}`);
-                if (typeof cb === 'function') cb({ success: true });
+                cb ?.({ success: true });
             } catch {
-                if (typeof cb === 'function') cb({ success: false, message: 'Failed to join chat room' });
+                cb ?.({ success: false, message: 'Failed to join chat room' });
             }
         });
 
@@ -116,12 +104,10 @@ export const registerGroupChat = (io) => {
             try {
                 const chat = await prisma.directChat.findUnique({ where: { id: chatId } });
                 if (!chat || (chat.user1Id !== socket.user.id && chat.user2Id !== socket.user.id)) {
-                    if (typeof cb === 'function') cb({ success: false, message: 'Not authorized' });
-                    return;
+                    return cb ?.({ success: false, message: 'Not authorized' });
                 }
                 if (!content || !content.trim()) {
-                    if (typeof cb === 'function') cb({ success: false, message: 'Message cannot be empty' });
-                    return;
+                    return cb ?.({ success: false, message: 'Message cannot be empty' });
                 }
 
                 const message = await prisma.directMessage.create({
@@ -149,9 +135,9 @@ export const registerGroupChat = (io) => {
                     message,
                 });
 
-                if (typeof cb === 'function') cb({ success: true, message });
+                cb ?.({ success: true, message });
             } catch (err) {
-                if (typeof cb === 'function') cb({ success: false, message: 'Failed to send message' });
+                cb ?.({ success: false, message: 'Failed to send message' });
             }
         });
 
@@ -159,12 +145,10 @@ export const registerGroupChat = (io) => {
             try {
                 const msg = await prisma.directMessage.findUnique({ where: { id: messageId } });
                 if (!msg || msg.chatId !== chatId) {
-                    if (typeof cb === 'function') cb({ success: false, message: 'Message not found' });
-                    return;
+                    return cb ?.({ success: false, message: 'Message not found' });
                 }
                 if (msg.senderId !== socket.user.id && socket.user.role !== 'ADMIN') {
-                    if (typeof cb === 'function') cb({ success: false, message: 'You can only unsend your own messages' });
-                    return;
+                    return cb ?.({ success: false, message: 'You can only unsend your own messages' });
                 }
 
                 const updated = await prisma.directMessage.update({
@@ -183,9 +167,9 @@ export const registerGroupChat = (io) => {
                     messageId,
                     message: updated,
                 });
-                if (typeof cb === 'function') cb({ success: true, message: updated });
+                cb ?.({ success: true, message: updated });
             } catch (err) {
-                if (typeof cb === 'function') cb({ success: false, message: 'Failed to unsend message' });
+                cb ?.({ success: false, message: 'Failed to unsend message' });
             }
         });
 
