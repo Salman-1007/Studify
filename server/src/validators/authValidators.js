@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-export const SUPPORTED_CLASSES = ['9', '10', '11', '12'];
-export const SUPPORTED_BOARDS = ['Punjab', 'Federal', 'Federal/FBISE', 'Sindh', 'KPK'];
+export const SUPPORTED_CLASSES = ['9', '10', '11', '12', 'MDCAT', 'ECAT'];
+export const SUPPORTED_BOARDS = ['Punjab', 'Federal', 'Federal/FBISE', 'Sindh', 'KPK', 'PMDC', 'UET', 'National'];
 
 export const signupSchema = z.object({
     name: z.string().min(2, 'Name must be at least 2 characters'),
@@ -16,19 +16,22 @@ export const signupSchema = z.object({
     educationLevel: z.enum(['SCHOOL', 'COLLEGE', 'UNIVERSITY', 'OTHER']).optional(),
 }).transform((data) => {
     // Normalize class/grade:
-    const rawClass = data.class !== undefined ? String(data.class) : (data.grade !== undefined ? String(data.grade) : '');
+    let rawClass = data.class !== undefined ? String(data.class).trim() : (data.grade !== undefined ? String(data.grade).trim() : '');
+    const upper = rawClass.toUpperCase();
+    if (upper === 'MCAT' || upper === 'MDCAT') rawClass = 'MDCAT';
+    else if (upper === 'ECAT') rawClass = 'ECAT';
     return {
         ...data,
         grade: rawClass,
     };
 }).refine((data) => SUPPORTED_CLASSES.includes(data.grade), {
-    message: 'Class must be 9, 10, 11, or 12',
+    message: 'Class must be 9, 10, 11, 12, MDCAT, or ECAT',
     path: ['class'],
 }).refine((data) => {
     const norm = data.board.trim().toLowerCase();
     return SUPPORTED_BOARDS.some((b) => b.toLowerCase() === norm);
 }, {
-    message: 'Board must be Punjab, Federal/FBISE, Sindh, or KPK',
+    message: 'Board must be Punjab, Federal/FBISE, Sindh, KPK, PMDC, or UET',
     path: ['board'],
 }).refine((data) => !data.confirmPassword || data.password === data.confirmPassword, {
     message: 'Passwords do not match',

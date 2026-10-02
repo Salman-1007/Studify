@@ -11,4 +11,3 @@ router.get('/:id/download', ctrl.downloadQuestionPack);
 router.post('/', requireAdmin, ctrl.createQuestionPack);
 
 export default router;
-

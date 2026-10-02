@@ -86,7 +86,7 @@ export const signup = asyncHandler(async(req, res) => {
             email: normalizedEmail,
             passwordHash,
             grade: assignedGrade,
-            board: board ? board.trim() : 'Punjab',
+            board: board ? board.trim() : (assignedGrade === 'MDCAT' ? 'PMDC' : assignedGrade === 'ECAT' ? 'UET' : 'Punjab'),
             educationLevel: edLevel,
             institution: institution ? institution.trim() : null,
             level: 1,

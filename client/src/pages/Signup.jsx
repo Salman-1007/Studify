@@ -23,7 +23,18 @@ export default function Signup() {
 
   if (!loading && user) return <Navigate to="/dashboard" replace />;
 
-  const update = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+  const update = (key) => (e) => {
+    const val = e.target.value;
+    setForm((f) => {
+      const next = { ...f, [key]: val };
+      if (key === 'class') {
+        if (val === 'MDCAT') next.board = 'PMDC';
+        else if (val === 'ECAT') next.board = 'UET';
+        else if (['PMDC', 'UET'].includes(next.board)) next.board = 'Punjab';
+      }
+      return next;
+    });
+  };
 
   const onSubmit = async (e) => {
     e.preventDefault();
@@ -53,7 +64,7 @@ export default function Signup() {
         <div className="text-center mb-8">
           <div className="w-10 h-10 rounded-lg bg-blue-500 mx-auto mb-3 flex items-center justify-center font-bold text-white">S</div>
           <h1 className="text-xl font-semibold text-white" style={{ fontFamily: 'Poppins' }}>Create your account</h1>
-          <p className="text-xs text-slate-400 mt-1">Join Studify for Classes 9–12</p>
+          <p className="text-xs text-slate-400 mt-1">Join Studify for Classes 9–12, MDCAT & ECAT</p>
         </div>
         <form onSubmit={onSubmit} className="space-y-4">
           <div>
@@ -93,6 +104,8 @@ export default function Signup() {
                 <option value="Federal/FBISE">Federal (FBISE)</option>
                 <option value="Sindh">Sindh Board</option>
                 <option value="KPK">KPK Board</option>
+                <option value="PMDC">PMDC (MDCAT National)</option>
+                <option value="UET">UET (ECAT Combined)</option>
               </select>
             </div>
           </div>

@@ -14,4 +14,3 @@ router.post('/:chatId/messages', ctrl.sendDirectMessage);
 router.delete('/messages/:messageId', ctrl.unsendDirectMessage);
 
 export default router;
-

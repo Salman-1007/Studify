@@ -45,7 +45,7 @@ export const getSubjects = asyncHandler(async(req, res) => {
     if (targetClass) where.classGrade = targetClass;
     if (boardId) where.boardId = boardId;
 
-    const subjects = await prisma.curriculumSubject.findMany({
+    let subjects = await prisma.curriculumSubject.findMany({
         where,
         orderBy: { subjectName: 'asc' },
         select: {
@@ -60,6 +60,25 @@ export const getSubjects = asyncHandler(async(req, res) => {
             _count: { select: { chapters: true, questions: true } },
         },
     });
+
+    // If boardId filter produced 0 subjects (e.g. boardId was PMDC but grade was 9), fallback to grade subjects
+    if (subjects.length === 0 && targetClass && boardId) {
+        subjects = await prisma.curriculumSubject.findMany({
+            where: { classGrade: targetClass },
+            orderBy: { subjectName: 'asc' },
+            select: {
+                id: true,
+                boardId: true,
+                classGrade: true,
+                subjectName: true,
+                bookName: true,
+                code: true,
+                description: true,
+                board: { select: { id: true, name: true, code: true } },
+                _count: { select: { chapters: true, questions: true } },
+            },
+        });
+    }
 
     const mappedSubjects = subjects.map((s) => ({
         ...s,

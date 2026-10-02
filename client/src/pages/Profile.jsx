@@ -28,6 +28,8 @@ const SUPPORTED_CLASSES = [
   { value: '10', label: 'Class 10 (Matric 2)' },
   { value: '11', label: 'Class 11 (FSc 1)' },
   { value: '12', label: 'Class 12 (FSc 2)' },
+  { value: 'MDCAT', label: 'MDCAT (Pre-Medical Entry Test)' },
+  { value: 'ECAT', label: 'ECAT (Engineering Entry Test)' },
 ];
 
 const SUPPORTED_BOARDS = [
@@ -35,6 +37,8 @@ const SUPPORTED_BOARDS = [
   { value: 'Federal/FBISE', label: 'Federal Board (FBISE)' },
   { value: 'Sindh', label: 'Sindh Board' },
   { value: 'KPK', label: 'KPK Board' },
+  { value: 'PMDC', label: 'PMDC (MDCAT National)' },
+  { value: 'UET', label: 'UET (ECAT Combined)' },
 ];
 
 export default function Profile() {
@@ -239,8 +243,8 @@ export default function Profile() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
         <AcademicBadge
           icon={BookOpen}
-          label="Class"
-          value={`Class ${u.class || u.grade || '9'}`}
+          label="Target Track"
+          value={(u.class || u.grade || '9').toUpperCase().includes('MDCAT') ? 'MDCAT' : (u.class || u.grade || '9').toUpperCase().includes('ECAT') ? 'ECAT' : `Class ${u.class || u.grade || '9'}`}
           accent="text-blue-400"
         />
         <AcademicBadge

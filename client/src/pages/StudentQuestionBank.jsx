@@ -28,21 +28,30 @@ export default function StudentQuestionBank() {
     queryFn: () => api.get('/curriculum/boards').then((r) => r.data.data.boards),
   });
 
-  // Automatically select Punjab Board when loaded
+  // Automatically select appropriate Board when loaded or grade changes
   useEffect(() => {
-    if (boards && boards.length > 0 && !selectedBoardId) {
-      setSelectedBoardId(boards[0].id);
+    if (boards && boards.length > 0) {
+      if (selectedGrade === 'MDCAT') {
+        const pmdc = boards.find((b) => b.code === 'PMDC');
+        if (pmdc) setSelectedBoardId(pmdc.id);
+      } else if (selectedGrade === 'ECAT') {
+        const uet = boards.find((b) => b.code === 'UET');
+        if (uet) setSelectedBoardId(uet.id);
+      } else {
+        const punjab = boards.find((b) => b.code === 'PUNJAB' || b.name.includes('Punjab'));
+        if (punjab) setSelectedBoardId(punjab.id);
+        else if (!selectedBoardId) setSelectedBoardId(boards[0].id);
+      }
     }
-  }, [boards, selectedBoardId]);
+  }, [boards, selectedGrade]);
 
-  // 2. Fetch Subjects for Board & Selected Grade
+  // 2. Fetch Subjects for Selected Grade (resilient without board mismatch)
   const { data: subjects, isLoading: loadingSubjects } = useQuery({
     queryKey: ['curriculum-subjects', selectedBoardId, selectedGrade],
     queryFn: () =>
       api
-        .get('/curriculum/subjects', { params: { boardId: selectedBoardId, gradeLevel: selectedGrade } })
+        .get('/curriculum/subjects', { params: { boardId: selectedBoardId || undefined, classGrade: selectedGrade } })
         .then((r) => r.data.data.subjects),
-    enabled: !!selectedBoardId,
   });
 
   // Automatically select first subject when subjects load or change
@@ -53,8 +62,11 @@ export default function StudentQuestionBank() {
         setSelectedSubjectId(subjects[0].id);
         setSelectedChapterId('');
       }
+      if (subjects[0].boardId && (!selectedBoardId || selectedGrade === 'MDCAT' || selectedGrade === 'ECAT')) {
+        setSelectedBoardId(subjects[0].boardId);
+      }
     }
-  }, [subjects, selectedSubjectId]);
+  }, [subjects, selectedSubjectId, selectedGrade]);
 
   // 3. Fetch Chapters for selected Subject
   const { data: chapters, isLoading: loadingChapters } = useQuery({
@@ -127,10 +139,10 @@ export default function StudentQuestionBank() {
               Curriculum Question Bank
             </span>
             <span className="px-2.5 py-0.5 text-xs font-medium rounded-full bg-slate-800 text-slate-300">
-              Punjab Textbook Board / PECTAA
+              {selectedGrade === 'MDCAT' ? 'PMDC National Curriculum' : selectedGrade === 'ECAT' ? 'UET Combined Entry Test' : 'Punjab Textbook Board / PECTAA'}
             </span>
             <span className="px-2.5 py-0.5 text-xs font-medium rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-              Class {selectedGrade} {currentSubject?.subjectName || ''}
+              {selectedGrade.startsWith('MDCAT') || selectedGrade.startsWith('ECAT') ? selectedGrade : `Class ${selectedGrade}`} · {currentSubject?.subjectName || ''}
             </span>
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-white" style={{ fontFamily: 'Poppins' }}>
@@ -154,8 +166,8 @@ export default function StudentQuestionBank() {
       <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Class:</span>
-          <div className="flex items-center gap-1.5 bg-slate-800/80 p-1 rounded-xl border border-slate-700/60">
-            {['9', '10'].map((grade) => (
+          <div className="flex items-center gap-1.5 bg-slate-800/80 p-1 rounded-xl border border-slate-700/60 overflow-x-auto">
+            {['9', '10', '11', '12', 'MDCAT', 'ECAT'].map((grade) => (
               <button
                 key={grade}
                 type="button"
@@ -164,13 +176,13 @@ export default function StudentQuestionBank() {
                   setSelectedSubjectId('');
                   setSelectedChapterId('');
                 }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
                   String(selectedGrade) === String(grade)
                     ? 'bg-blue-500 text-white shadow-sm'
                     : 'text-slate-400 hover:text-white'
                 }`}
               >
-                Class {grade}
+                {grade === 'MDCAT' ? 'MDCAT' : grade === 'ECAT' ? 'ECAT' : `Class ${grade}`}
               </button>
             ))}
           </div>

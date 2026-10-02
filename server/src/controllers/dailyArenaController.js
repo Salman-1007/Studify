@@ -178,8 +178,8 @@ export const generateDailyChallenge = asyncHandler(async (req, res) => {
   const sanitizedQuestions = picked.map((q, idx) => ({
     order: idx,
     questionId: q.id,
-    subjectName: q.subjectName,
-    chapterName: q.chapterName,
+    subjectName: q.subject?.subjectName || q.subjectName || 'General',
+    chapterName: q.chapter?.chapterName || q.chapterName || '',
     questionText: q.questionText,
     optionA: q.optionA,
     optionB: q.optionB,
