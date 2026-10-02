@@ -57,7 +57,7 @@ export const signup = asyncHandler(async(req, res) => {
     if (existingEmail) throw new ApiError(409, 'Email is already in use');
 
     const assignedGrade = String(grade || classVal || '9');
-    let finalUsername = username ?.trim();
+    let finalUsername = username?.trim();
     if (!finalUsername) {
         const base = normalizedEmail.split('@')[0].replace(/[^a-zA-Z0-9_]/g, '') || 'student';
         let candidate = base;
@@ -150,7 +150,7 @@ export const login = asyncHandler(async(req, res) => {
 });
 
 export const refresh = asyncHandler(async(req, res) => {
-    const token = req.cookies ?.[REFRESH_COOKIE];
+    const token = req.cookies?.[REFRESH_COOKIE];
     if (!token) throw new ApiError(401, 'No refresh token');
 
     const stored = await prisma.refreshToken.findUnique({ where: { token } });
@@ -165,7 +165,7 @@ export const refresh = asyncHandler(async(req, res) => {
 });
 
 export const logout = asyncHandler(async(req, res) => {
-    const token = req.cookies ?.[REFRESH_COOKIE];
+    const token = req.cookies?.[REFRESH_COOKIE];
     if (token) {
         await prisma.refreshToken.updateMany({ where: { token }, data: { revoked: true } });
     }

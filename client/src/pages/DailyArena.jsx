@@ -42,7 +42,20 @@ const SUBJECT_COLORS = {
   Mathematics: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
   English: 'bg-rose-500/20 text-rose-400 border-rose-500/30',
   'Logical Reasoning': 'bg-fuchsia-500/20 text-fuchsia-400 border-fuchsia-500/30',
+  'Computer Science': 'bg-sky-500/20 text-sky-400 border-sky-500/30',
   General: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+};
+
+const normalizeTrack = (raw) => {
+  if (!raw) return '9';
+  const s = String(raw).toUpperCase().trim();
+  if (s.includes('MDCAT') || s.includes('MCAT')) return 'MDCAT';
+  if (s.includes('ECAT')) return 'ECAT';
+  if (s.includes('12')) return '12';
+  if (s.includes('11')) return '11';
+  if (s.includes('10')) return '10';
+  if (s.includes('9')) return '9';
+  return '9';
 };
 
 export default function DailyArena() {
@@ -52,13 +65,15 @@ export default function DailyArena() {
   const [searchParams] = useSearchParams();
 
   const queryTrack = searchParams.get('track');
+  const autoStart = searchParams.get('auto') === 'true';
 
   // Arena Config States
-  const [selectedTrack, setSelectedTrack] = useState(() => queryTrack || user?.class || user?.grade || '9');
+  const [selectedTrack, setSelectedTrack] = useState(() => normalizeTrack(queryTrack || user?.class || user?.grade || '9'));
   const [mode, setMode] = useState('GRAND'); // 'SOLO' | 'MULTI' | 'GRAND'
   const [selectedSubjectIds, setSelectedSubjectIds] = useState([]);
   const [questionCount, setQuestionCount] = useState(10);
   const [activeTab, setActiveTab] = useState('arena'); // 'arena' | 'leaderboard'
+  const autoStartedRef = useRef(false);
 
   // Test Runner States
   const [session, setSession] = useState(null);
@@ -173,14 +188,37 @@ export default function DailyArena() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [session, currentIndex, result, answers]);
 
+  // Auto-select first subject when entering SOLO mode
+  useEffect(() => {
+    if (mode === 'SOLO' && subjects.length > 0) {
+      if (!selectedSubjectIds.length || !subjects.some((s) => s.id === selectedSubjectIds[0])) {
+        setSelectedSubjectIds([subjects[0].id]);
+      }
+    }
+  }, [mode, subjects]);
+
   const handleStartArena = async (overrideTrack = null) => {
     try {
       setSubmitting(true);
-      const effectiveTrack = (typeof overrideTrack === 'string' && overrideTrack) ? overrideTrack : selectedTrack;
+      const effectiveTrack = (typeof overrideTrack === 'string' && overrideTrack)
+        ? normalizeTrack(overrideTrack)
+        : selectedTrack;
+
+      let effectiveSubjectIds = [];
+      if (mode === 'SOLO') {
+        effectiveSubjectIds = selectedSubjectIds.length > 0
+          ? [selectedSubjectIds[0]]
+          : (subjects[0] ? [subjects[0].id] : []);
+      } else if (mode === 'MULTI') {
+        effectiveSubjectIds = selectedSubjectIds.length > 0
+          ? selectedSubjectIds
+          : subjects.slice(0, 2).map((s) => s.id);
+      }
+
       const res = await api.post('/daily-arena/generate', {
         track: effectiveTrack,
         mode,
-        subjectIds: mode === 'GRAND' ? [] : selectedSubjectIds,
+        subjectIds: mode === 'GRAND' ? [] : effectiveSubjectIds,
         questionCount,
       });
 
@@ -207,10 +245,21 @@ export default function DailyArena() {
 
   // Sync track when query parameter changes
   useEffect(() => {
-    if (queryTrack && queryTrack !== selectedTrack) {
-      setSelectedTrack(queryTrack);
+    if (queryTrack) {
+      const normalized = normalizeTrack(queryTrack);
+      if (normalized !== selectedTrack) {
+        setSelectedTrack(normalized);
+      }
     }
   }, [queryTrack]);
+
+  // Auto-start daily challenge if auto=true
+  useEffect(() => {
+    if (autoStart && !autoStartedRef.current && !session && !result) {
+      autoStartedRef.current = true;
+      handleStartArena(queryTrack || selectedTrack);
+    }
+  }, [autoStart, queryTrack, selectedTrack, session, result]);
 
   const handleSelectOption = (questionId, optionKey) => {
     setAnswers((prev) => ({
@@ -829,6 +878,7 @@ export default function DailyArena() {
             </div>
 
             <button
+              type="button"
               onClick={() => handleStartArena()}
               disabled={submitting}
               className="py-3 px-8 rounded-xl bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-semibold text-sm flex items-center justify-center gap-2 shadow-lg shadow-orange-500/20 cursor-pointer transition-all"

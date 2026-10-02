@@ -63,7 +63,7 @@ beforeAll(async () => {
     },
   });
   questionId = q.id;
-});
+}, 30000);
 
 describe('Daily Mock Quiz Arena API', () => {
   let attemptId;

@@ -73,7 +73,7 @@ export const createDeckFromQuestionBank = asyncHandler(async(req, res) => {
                         data: {
                             userId: req.user.id,
                             title: deckTitle,
-                            topic: firstQ.chapter ?.chapterName || 'Punjab Board Curriculum',
+                            topic: firstQ.chapter?.chapterName || 'Punjab Board Curriculum',
                             cards: {
                                 create: selected.map((q) => {
                                             const optLetter = q.correctAnswer ? q.correctAnswer.trim().toUpperCase() : 'A';

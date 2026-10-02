@@ -34,6 +34,7 @@ import TestSession from './pages/TestSession.jsx';
 import TestResults from './pages/TestResults.jsx';
 import DirectChat from './pages/DirectChat.jsx';
 import TestHistory from './pages/TestHistory.jsx';
+import DailyArena from './pages/DailyArena.jsx';
 import NotFound from './pages/NotFound.jsx';
 import Landing from './pages/Landing.jsx';
 
@@ -47,6 +48,9 @@ export default function App() {
       <Route element={<ProtectedRoute />}>
         <Route element={<Layout />}>
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/daily-arena" element={<DailyArena />} />
+          <Route path="/daily-mock" element={<DailyArena />} />
+          <Route path="/daily-quiz" element={<DailyArena />} />
           <Route path="/mentor" element={<Mentor />} />
           <Route path="/mentor/:conversationId" element={<Mentor />} />
           <Route path="/chat" element={<DirectChat />} />

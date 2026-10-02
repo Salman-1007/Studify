@@ -23,7 +23,7 @@ export const listQuestionPacks = asyncHandler(async(req, res) => {
         });
     }
 
-    const where = req.user ?.role === 'ADMIN' ? {} : { isPublished: true };
+    const where = req.user?.role === 'ADMIN' ? {} : { isPublished: true };
     const packs = await prisma.questionPack.findMany({
         where,
         orderBy: { createdAt: 'desc' },
@@ -67,7 +67,7 @@ export const downloadQuestionPack = asyncHandler(async(req, res) => {
         questions: questions.map((q, idx) => ({
             index: idx + 1,
             chapter: q.chapter ? `Ch. ${q.chapter.chapterNumber}: ${q.chapter.chapterName}` : 'General',
-            topic: q.topic ?.topicName || 'General',
+            topic: q.topic?.topicName || 'General',
             question: q.questionText,
             options: {
                 A: q.optionA,

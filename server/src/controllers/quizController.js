@@ -36,7 +36,7 @@ export const submitAttempt = asyncHandler(async(req, res) => {
         const given = answers.find((a) => a.questionId === q.id);
         const isCorrect = given && given.answer.trim().toLowerCase() === q.correctAnswer.trim().toLowerCase();
         if (isCorrect) score += 1;
-        questionAttemptsData.push({ questionId: q.id, givenAnswer: given ?.answer ?? '', isCorrect: Boolean(isCorrect) });
+        questionAttemptsData.push({ questionId: q.id, givenAnswer: given?.answer ?? '', isCorrect: Boolean(isCorrect) });
         await recordTopicResult(req.user.id, quiz.topic, quiz.subject, Boolean(isCorrect));
     }
 
@@ -111,8 +111,8 @@ export const createQuizFromQuestionBank = asyncHandler(async(req, res) => {
     const quiz = await prisma.quiz.create({
         data: {
             title: quizTitle,
-            topic: firstQ.chapter ?.chapterName || 'Curriculum',
-            subject: firstQ.subject ?.subjectName || 'Physics',
+            topic: firstQ.chapter?.chapterName || 'Curriculum',
+            subject: firstQ.subject?.subjectName || 'Physics',
             difficulty: difficulty === 'EASY' ? 'EASY' : difficulty === 'HARD' ? 'HARD' : 'MEDIUM',
             creatorId: req.user.id,
             source: 'question_bank',

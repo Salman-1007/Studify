@@ -24,7 +24,7 @@ export const createGroupQuiz = asyncHandler(async(req, res) => {
                 data: {
                     title: title || `${chapter.chapterName} Group Challenge`,
                     topic: chapter.chapterName,
-                    subject: chapter.subject ?.subjectName || 'Curriculum',
+                    subject: chapter.subject?.subjectName || 'Curriculum',
                     creatorId: req.user.id,
                     source: 'bank',
                     questions: {
@@ -149,7 +149,7 @@ export const endGroupQuiz = asyncHandler(async(req, res) => {
 
     // Calculate podium and winner announcement
     const submittedParticipants = (updated.participants || []).filter((p) => p.submittedAt !== null);
-    const totalQuestions = groupQuiz.quiz ?.questions ?.length || 10;
+    const totalQuestions = groupQuiz.quiz?.questions?.length || 10;
     const p1 = submittedParticipants[0];
     const p2 = submittedParticipants[1];
     const p3 = submittedParticipants[2];

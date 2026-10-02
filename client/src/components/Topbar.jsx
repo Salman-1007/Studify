@@ -105,7 +105,6 @@ export default function Topbar({ onMenuClick }) {
             <span>Admin Panel</span>
           </Link>
         )}
-
         {/* Interactive Notifications Button & Dropdown */}
         <div className="relative" ref={dropdownRef}>
           <button
@@ -195,7 +194,6 @@ export default function Topbar({ onMenuClick }) {
           </div>
           <span className="hidden sm:block text-sm text-slate-200">{user?.name}</span>
         </div>
-
         <button onClick={handleLogout} className="text-slate-400 hover:text-red-400 p-1.5 rounded-lg hover:bg-slate-800/60 transition-colors" title="Log out">
           <LogOut size={18} />
         </button>

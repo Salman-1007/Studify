@@ -52,6 +52,7 @@ export default function StudentQuestionBank() {
       api
         .get('/curriculum/subjects', { params: { boardId: selectedBoardId || undefined, classGrade: selectedGrade } })
         .then((r) => r.data.data.subjects),
+    enabled: !!selectedBoardId,
   });
 
   // Automatically select first subject when subjects load or change
@@ -139,9 +140,11 @@ export default function StudentQuestionBank() {
               Curriculum Question Bank
             </span>
             <span className="px-2.5 py-0.5 text-xs font-medium rounded-full bg-slate-800 text-slate-300">
+              Punjab Textbook Board / PECTAA
               {selectedGrade === 'MDCAT' ? 'PMDC National Curriculum' : selectedGrade === 'ECAT' ? 'UET Combined Entry Test' : 'Punjab Textbook Board / PECTAA'}
             </span>
             <span className="px-2.5 py-0.5 text-xs font-medium rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+              Class {selectedGrade} {currentSubject?.subjectName || ''}
               {selectedGrade.startsWith('MDCAT') || selectedGrade.startsWith('ECAT') ? selectedGrade : `Class ${selectedGrade}`} · {currentSubject?.subjectName || ''}
             </span>
           </div>

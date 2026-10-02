@@ -411,7 +411,7 @@ export const importQuestions = asyncHandler(async(req, res) => {
             invalidCount++;
             errors.push({
                 index: i,
-                question: raw ?.question || raw ?.questionText || `Record #${i + 1}`,
+                question: raw?.question || raw?.questionText || `Record #${i + 1}`,
                 reason: err.issues ? err.issues.map((it) => `${it.path.join('.')}: ${it.message}`).join(', ') : err.message,
             });
         }

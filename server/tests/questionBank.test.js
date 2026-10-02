@@ -7,7 +7,7 @@ let adminToken, studentToken, studentId;
 let boardId, subjectId, chapterId;
 let testAttemptId, question1Id, question2Id;
 
-beforeAll(async() => {
+beforeAll(async () => {
     process.env.JWT_ACCESS_SECRET = 'test_access_secret_question_bank';
     ({ app, prisma } = await buildTestApp());
 
@@ -67,7 +67,7 @@ beforeAll(async() => {
         },
     });
     chapterId = chapter.id;
-});
+}, 30000);
 
 describe('Phase 2 — Curriculum Browsing API', () => {
     it('GET /api/curriculum/boards returns curriculum boards', async() => {

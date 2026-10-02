@@ -28,8 +28,8 @@ export const generateTest = asyncHandler(async(req, res) => {
         if (!chapter) throw new ApiError(404, 'Chapter not found');
     }
 
-    const subjectId = parsed.subjectId || chapter ?.subjectId;
-    const subject = chapter ?.subject || await prisma.curriculumSubject.findUnique({
+    const subjectId = parsed.subjectId || chapter?.subjectId;
+    const subject = chapter?.subject || await prisma.curriculumSubject.findUnique({
         where: { id: subjectId },
         include: { board: true },
     });
@@ -120,7 +120,7 @@ export const generateTest = asyncHandler(async(req, res) => {
         optionC: q.optionC,
         optionD: q.optionD,
         difficulty: q.difficulty,
-        topic: q.topic ?.topicName || null,
+        topic: q.topic?.topicName || null,
     }));
 
     const testTitle = parsed.title || `${subject.bookName || subject.subjectName} Practice Test`;
@@ -213,7 +213,7 @@ export const submitTest = asyncHandler(async(req, res) => {
         }
 
         // Track topic stats for chapter mastery breakdown
-        const topicName = q.topic ?.topicName || attempt.chapter ?.chapterName || 'Key Concepts';
+        const topicName = q.topic?.topicName || attempt.chapter?.chapterName || 'Key Concepts';
         if (!topicStats[topicName]) {
             topicStats[topicName] = { total: 0, correct: 0 };
         }
@@ -238,7 +238,7 @@ export const submitTest = asyncHandler(async(req, res) => {
             await recordTopicResult(
                 req.user.id,
                 topicName,
-                attempt.subject ?.subjectName || 'Physics',
+                attempt.subject?.subjectName || 'Physics',
                 Boolean(isCorrect)
             );
         } catch {
@@ -397,7 +397,7 @@ export const getTestAttempt = asyncHandler(async(req, res) => {
             difficulty: qa.question.difficulty,
             timeSpentSeconds: qa.timeSpentSeconds || 0,
             isFlagged: qa.isFlagged || false,
-            topic: qa.question.topic ?.topicName || attempt.chapter ?.chapterName || null,
+            topic: qa.question.topic?.topicName || attempt.chapter?.chapterName || null,
             questionBankItem: qa.question,
         }));
 
@@ -456,7 +456,7 @@ export const getTestAttempt = asyncHandler(async(req, res) => {
         optionC: qa.question.optionC,
         optionD: qa.question.optionD,
         difficulty: qa.question.difficulty,
-        topic: qa.question.topic ?.topicName || null,
+        topic: qa.question.topic?.topicName || null,
     }));
 
     const ongoingPayload = {
@@ -528,11 +528,11 @@ export const getAiDiagnostic = asyncHandler(async(req, res) => {
             correctOption: qa.question.correctAnswer,
             correctAnswer: qa.question.correctAnswer,
             explanation: qa.question.explanation || '',
-            chapterName: qa.question.topic ?.topicName || attempt.chapter ?.chapterName || 'General',
+            chapterName: qa.question.topic?.topicName || attempt.chapter?.chapterName || 'General',
         }));
 
     const diagnostic = await generateMistakeDiagnostic({
-        testTitle: `${attempt.subject ?.bookName || attempt.subject ?.subjectName || 'Physics 9'} - ${attempt.chapter ?.chapterName || 'Chapter Test'}`,
+        testTitle: `${attempt.subject?.bookName || attempt.subject?.subjectName || 'Physics 9'} - ${attempt.chapter?.chapterName || 'Chapter Test'}`,
         score: attempt.score,
         totalQuestions: attempt.totalQuestions,
         percentage: attempt.percentage,
@@ -565,8 +565,8 @@ export const getTestHistory = asyncHandler(async(req, res) => {
     });
 
     const mappedAttempts = attempts.map((a) => {
-        const subName = a.subject ?.bookName || a.subject ?.subjectName || 'Physics 9';
-        const chapTitle = a.chapter ?.chapterName || 'Chapter';
+        const subName = a.subject?.bookName || a.subject?.subjectName || 'Physics 9';
+        const chapTitle = a.chapter?.chapterName || 'Chapter';
         return {
             ...a,
             title: `${subName} Test`,
