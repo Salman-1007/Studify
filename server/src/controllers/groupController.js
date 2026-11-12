@@ -3,6 +3,18 @@ import { prisma } from '../config/db.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ok } from '../utils/response.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import {
+    fetchScopedMessages,
+    createScopedMessage,
+    editScopedMessage,
+    deleteScopedMessageForMe,
+    deleteScopedMessageForEveryone,
+    toggleScopedReaction,
+    toggleScopedPin,
+    markScopedMessagesRead,
+    updateConversationPreference,
+} from '../services/messagingService.js';
+import { getSocketIo } from '../services/notificationService.js';
 
 const genJoinCode = () => crypto.randomBytes(4).toString('hex').toUpperCase();
 
@@ -113,34 +125,34 @@ export const deleteGroup = asyncHandler(async(req, res) => {
 
 export const getMessages = asyncHandler(async(req, res) => {
     await requireMembership(req.params.id, req.user.id);
-    const cursor = req.query.cursor;
-    const messages = await prisma.groupMessage.findMany({
-        where: { groupId: req.params.id },
-        orderBy: { createdAt: 'desc' },
-        take: 30,
-        ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
-        include: { sender: { select: { id: true, name: true, username: true, avatarUrl: true } } },
+    const { search, limit } = req.query;
+    const result = await fetchScopedMessages({
+        scope: 'GROUP',
+        targetId: req.params.id,
+        viewerId: req.user.id,
+        search,
+        limit,
     });
-    const sanitized = messages.map((m) => ({
-        ...m,
-        content: m.isUnsent ? 'This message was unsent' : m.content,
-    }));
-    ok(res, { messages: sanitized.reverse() });
+    ok(res, result);
 });
 
 export const sendMessage = asyncHandler(async(req, res) => {
     await requireMembership(req.params.id, req.user.id);
-    const { content } = req.body;
-    if (!content || !content.trim()) throw new ApiError(400, 'Content cannot be empty');
-
-    const message = await prisma.groupMessage.create({
-        data: {
-            groupId: req.params.id,
-            senderId: req.user.id,
-            content: content.trim(),
-        },
-        include: { sender: { select: { id: true, name: true, username: true, avatarUrl: true } } },
+    const { content, messageType, attachment, replyToId } = req.body;
+    const message = await createScopedMessage({
+        scope: 'GROUP',
+        targetId: req.params.id,
+        senderId: req.user.id,
+        content,
+        messageType,
+        attachment,
+        replyToId,
     });
+
+    const io = getSocketIo();
+    if (io) {
+        io.to(`group:${req.params.id}`).emit('group:message', message);
+    }
 
     ok(res, { message }, 201);
 });
@@ -153,25 +165,147 @@ export const unsendMessage = asyncHandler(async(req, res) => {
     });
     if (!message) throw new ApiError(404, 'Message not found');
 
-    if (
-        message.senderId !== req.user.id &&
-        message.group.ownerId !== req.user.id &&
-        req.user.role !== 'ADMIN'
-    ) {
-        throw new ApiError(403, 'Unauthorized to unsend this message');
-    }
+    const membership = await prisma.groupMember.findUnique({
+        where: { groupId_userId: { groupId: message.groupId, userId: req.user.id } },
+    });
+    const isModeratorOrOwner = Boolean(
+        message.group.ownerId === req.user.id ||
+        membership?.role === 'OWNER' ||
+        membership?.role === 'MODERATOR'
+    );
 
-    const updated = await prisma.groupMessage.update({
-        where: { id: messageId },
-        data: {
-            isUnsent: true,
-            unsentAt: new Date(),
-            content: 'This message was unsent',
-        },
-        include: { sender: { select: { id: true, name: true, username: true, avatarUrl: true } } },
+    const updated = await deleteScopedMessageForEveryone({
+        scope: 'GROUP',
+        messageId,
+        userId: req.user.id,
+        userRole: req.user.role,
+        isModeratorOrOwner,
     });
 
+    const io = getSocketIo();
+    if (io) {
+        io.to(`group:${message.groupId}`).emit('group:message_unsent', {
+            messageId,
+            message: updated,
+        });
+    }
+
     ok(res, { message: updated });
+});
+
+export const editGroupMessage = asyncHandler(async(req, res) => {
+    await requireMembership(req.params.id, req.user.id);
+    const { messageId } = req.params;
+    const existing = await prisma.groupMessage.findUnique({ where: { id: messageId } });
+    if (!existing || existing.groupId !== req.params.id) {
+        throw new ApiError(404, 'Message not found in this group');
+    }
+    const updated = await editScopedMessage({
+        scope: 'GROUP',
+        messageId,
+        userId: req.user.id,
+        content: req.body?.content,
+    });
+
+    const io = getSocketIo();
+    if (io) {
+        io.to(`group:${req.params.id}`).emit('group:message_updated', updated);
+    }
+    ok(res, { message: updated });
+});
+
+export const deleteGroupMessageForMe = asyncHandler(async(req, res) => {
+    await requireMembership(req.params.id, req.user.id);
+    const { messageId } = req.params;
+    const existing = await prisma.groupMessage.findUnique({ where: { id: messageId } });
+    if (!existing || existing.groupId !== req.params.id) {
+        throw new ApiError(404, 'Message not found in this group');
+    }
+    const result = await deleteScopedMessageForMe({
+        scope: 'GROUP',
+        messageId,
+        userId: req.user.id,
+    });
+    ok(res, result);
+});
+
+export const reactGroupMessage = asyncHandler(async(req, res) => {
+    await requireMembership(req.params.id, req.user.id);
+    const { messageId } = req.params;
+    const existing = await prisma.groupMessage.findUnique({ where: { id: messageId } });
+    if (!existing || existing.groupId !== req.params.id) {
+        throw new ApiError(404, 'Message not found in this group');
+    }
+    const result = await toggleScopedReaction({
+        scope: 'GROUP',
+        messageId,
+        userId: req.user.id,
+        emoji: req.body?.emoji,
+    });
+    const io = getSocketIo();
+    if (io) {
+        io.to(`group:${req.params.id}`).emit('group:message_updated', result.message);
+    }
+    ok(res, result);
+});
+
+export const pinGroupMessage = asyncHandler(async(req, res) => {
+    const membership = await requireMembership(req.params.id, req.user.id);
+    const group = await prisma.studyGroup.findUnique({ where: { id: req.params.id } });
+    const isAllowed = Boolean(
+        req.user.role === 'ADMIN' ||
+        group?.ownerId === req.user.id ||
+        membership.role === 'OWNER' ||
+        membership.role === 'MODERATOR'
+    );
+    const { messageId } = req.params;
+    const existing = await prisma.groupMessage.findUnique({ where: { id: messageId } });
+    if (!existing || existing.groupId !== req.params.id) {
+        throw new ApiError(404, 'Message not found in this group');
+    }
+    const updated = await toggleScopedPin({
+        scope: 'GROUP',
+        messageId,
+        userId: req.user.id,
+        isAllowed,
+    });
+    const io = getSocketIo();
+    if (io) {
+        io.to(`group:${req.params.id}`).emit('group:message_updated', updated);
+    }
+    ok(res, { message: updated });
+});
+
+export const markGroupMessagesRead = asyncHandler(async(req, res) => {
+    await requireMembership(req.params.id, req.user.id);
+    const result = await markScopedMessagesRead({
+        scope: 'GROUP',
+        targetId: req.params.id,
+        userId: req.user.id,
+        messageIds: req.body?.messageIds,
+    });
+    const io = getSocketIo();
+    if (io && result.messageIds.length > 0) {
+        io.to(`group:${req.params.id}`).emit('group:messages_seen', {
+            groupId: req.params.id,
+            userId: req.user.id,
+            seenAt: result.seenAt,
+            messageIds: result.messageIds,
+        });
+    }
+    ok(res, result);
+});
+
+export const clearGroupConversation = asyncHandler(async(req, res) => {
+    await requireMembership(req.params.id, req.user.id);
+    const action = req.body?.action === 'DELETE' ? 'DELETE' : 'CLEAR';
+    const pref = await updateConversationPreference({
+        userId: req.user.id,
+        targetType: 'GROUP',
+        targetId: req.params.id,
+        action,
+    });
+    ok(res, { preference: pref });
 });
 
 export { requireMembership };

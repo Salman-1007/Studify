@@ -9,6 +9,12 @@ router.use(requireAuth, requireAdmin);
 // Platform & User Management
 router.get('/users', ctrl.listUsers);
 router.patch('/users/:id/deactivate', ctrl.deactivateUser);
+router.get('/teachers', ctrl.listPendingTeachers);
+router.patch('/teachers/:id/approve', ctrl.approveTeacher);
+router.patch('/teachers/:id/reject', ctrl.rejectTeacher);
+router.get('/teacher-invites', ctrl.listTeacherInviteCodes);
+router.post('/teacher-invites', ctrl.createTeacherInviteCode);
+router.patch('/teacher-invites/:id/revoke', ctrl.revokeTeacherInviteCode);
 router.get('/groups', ctrl.listGroups);
 router.get('/stats', ctrl.platformStats);
 

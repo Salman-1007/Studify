@@ -2,53 +2,113 @@ import { prisma } from '../config/db.js';
 import { ok } from '../utils/response.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
+import {
+    formatPresence,
+    fetchScopedMessages,
+    createScopedMessage,
+    editScopedMessage,
+    deleteScopedMessageForMe,
+    deleteScopedMessageForEveryone,
+    toggleScopedReaction,
+    toggleScopedPin,
+    markScopedMessagesRead,
+    updateConversationPreference,
+    computeUnreadCount,
+} from '../services/messagingService.js';
+import { getSocketIo } from '../services/notificationService.js';
+
+const requireDirectParticipant = async(chatId, userId, allowAdmin = false) => {
+    const chat = await prisma.directChat.findUnique({ where: { id: chatId } });
+    if (!chat) throw new ApiError(404, 'Direct chat not found');
+    const isParticipant = chat.user1Id === userId || chat.user2Id === userId;
+    if (!isParticipant && !allowAdmin) {
+        throw new ApiError(403, 'Unauthorized');
+    }
+    return chat;
+};
 
 export const listDirectChats = asyncHandler(async(req, res) => {
     const currentUserId = req.user.id;
 
-    const chats = await prisma.directChat.findMany({
-        where: {
-            OR: [{ user1Id: currentUserId }, { user2Id: currentUserId }],
-        },
-        include: {
-            user1: {
-                select: { id: true, name: true, email: true, avatarUrl: true, grade: true, board: true, points: true },
+    const [chats, prefs] = await Promise.all([
+        prisma.directChat.findMany({
+            where: {
+                OR: [{ user1Id: currentUserId }, { user2Id: currentUserId }],
             },
-            user2: {
-                select: { id: true, name: true, email: true, avatarUrl: true, grade: true, board: true, points: true },
+            include: {
+                user1: {
+                    select: { id: true, name: true, email: true, avatarUrl: true, grade: true, board: true, points: true, lastSeenAt: true, showOnlineStatus: true },
+                },
+                user2: {
+                    select: { id: true, name: true, email: true, avatarUrl: true, grade: true, board: true, points: true, lastSeenAt: true, showOnlineStatus: true },
+                },
+                messages: {
+                    orderBy: { createdAt: 'desc' },
+                    take: 1,
+                },
             },
-            messages: {
-                orderBy: { createdAt: 'desc' },
-                take: 1,
-            },
-        },
-        orderBy: { updatedAt: 'desc' },
-    });
+            orderBy: { updatedAt: 'desc' },
+        }),
+        prisma.conversationPreference.findMany({
+            where: { userId: currentUserId, targetType: 'DIRECT' },
+        }),
+    ]);
 
-    const formattedChats = chats.map((chat) => {
+    const prefMap = new Map(prefs.map((p) => [p.targetId, p]));
+
+    const formattedChats = [];
+    for (const chat of chats) {
+        const pref = prefMap.get(chat.id);
+        const lastMessage = chat.messages[0] || null;
+        if (pref?.deletedAt) {
+            const deletedTime = new Date(pref.deletedAt).getTime();
+            const lastActivityTime = lastMessage
+                ? new Date(lastMessage.createdAt).getTime()
+                : new Date(chat.updatedAt || chat.createdAt).getTime();
+            if (lastActivityTime <= deletedTime) {
+                continue;
+            }
+        }
+
         const isUser1 = chat.user1Id === currentUserId;
         const partner = isUser1 ? chat.user2 : chat.user1;
-        const lastMessage = chat.messages[0] || null;
+        const isClearedLatest = Boolean(
+            pref?.clearedAt && lastMessage && new Date(lastMessage.createdAt) <= new Date(pref.clearedAt)
+        );
+        const unreadCount = await computeUnreadCount({
+            scope: 'DIRECT',
+            targetId: chat.id,
+            userId: currentUserId,
+            pref,
+        });
 
-        return {
+        formattedChats.push({
             id: chat.id,
             status: chat.status,
             initiatorId: chat.initiatorId,
             isInitiator: chat.initiatorId === currentUserId,
-            partner,
-            lastMessage: lastMessage ?
-                {
-                    id: lastMessage.id,
-                    content: lastMessage.isUnsent ? 'This message was unsent' : lastMessage.content,
-                    isUnsent: lastMessage.isUnsent,
-                    senderId: lastMessage.senderId,
-                    createdAt: lastMessage.createdAt,
-                } :
-                null,
+            partner: {
+                ...partner,
+                presence: formatPresence(partner),
+            },
+            unreadCount,
+            lastMessage:
+                lastMessage && !isClearedLatest
+                    ? {
+                          id: lastMessage.id,
+                          content:
+                              lastMessage.isUnsent || lastMessage.deletedForEveryoneAt
+                                  ? 'This message was unsent'
+                                  : lastMessage.content,
+                          isUnsent: Boolean(lastMessage.isUnsent || lastMessage.deletedForEveryoneAt),
+                          senderId: lastMessage.senderId,
+                          createdAt: lastMessage.createdAt,
+                      }
+                    : null,
             createdAt: chat.createdAt,
             updatedAt: chat.updatedAt,
-        };
-    });
+        });
+    }
 
     ok(res, { chats: formattedChats });
 });
@@ -203,68 +263,50 @@ export const getDirectMessages = asyncHandler(async(req, res) => {
     const { chatId } = req.params;
     const currentUserId = req.user.id;
 
-    const chat = await prisma.directChat.findUnique({ where: { id: chatId } });
-    if (!chat) throw new ApiError(404, 'Direct chat not found');
-    if (chat.user1Id !== currentUserId && chat.user2Id !== currentUserId && req.user.role !== 'ADMIN') {
-        throw new ApiError(403, 'Unauthorized');
-    }
-
-    const messages = await prisma.directMessage.findMany({
-        where: { chatId },
-        orderBy: { createdAt: 'asc' },
-        take: 100,
-        include: {
-            sender: {
-                select: { id: true, name: true, email: true, avatarUrl: true },
-            },
-        },
+    const chat = await requireDirectParticipant(chatId, currentUserId, req.user.role === 'ADMIN');
+    const result = await fetchScopedMessages({
+        scope: 'DIRECT',
+        targetId: chatId,
+        viewerId: currentUserId,
+        search: req.query.search,
+        limit: req.query.limit,
     });
 
-    const sanitizedMessages = messages.map((m) => ({
-        id: m.id,
-        chatId: m.chatId,
-        senderId: m.senderId,
-        sender: m.sender,
-        content: m.isUnsent ? 'This message was unsent' : m.content,
-        isUnsent: m.isUnsent,
-        unsentAt: m.unsentAt,
-        createdAt: m.createdAt,
-    }));
+    const partnerId = chat.user1Id === currentUserId ? chat.user2Id : chat.user1Id;
+    const partnerUser = await prisma.user.findUnique({
+        where: { id: partnerId },
+        select: { id: true, name: true, email: true, avatarUrl: true, lastSeenAt: true, showOnlineStatus: true },
+    });
 
-    ok(res, { messages: sanitizedMessages, chat });
+    ok(res, {
+        ...result,
+        chat,
+        partnerPresence: formatPresence(partnerUser),
+    });
 });
 
 export const sendDirectMessage = asyncHandler(async(req, res) => {
     const { chatId } = req.params;
-    const { content } = req.body;
+    const { content, messageType, attachment, replyToId } = req.body;
     const currentUserId = req.user.id;
 
-    if (!content || !content.trim()) {
-        throw new ApiError(400, 'Content cannot be empty');
-    }
-
-    const chat = await prisma.directChat.findUnique({ where: { id: chatId } });
-    if (!chat) throw new ApiError(404, 'Direct chat not found');
-    if (chat.user1Id !== currentUserId && chat.user2Id !== currentUserId) {
-        throw new ApiError(403, 'Unauthorized');
-    }
-
-    const message = await prisma.directMessage.create({
-        data: {
-            chatId,
-            senderId: currentUserId,
-            content: content.trim(),
-        },
-        include: {
-            sender: { select: { id: true, name: true, email: true, avatarUrl: true } },
-        },
+    const chat = await requireDirectParticipant(chatId, currentUserId);
+    const message = await createScopedMessage({
+        scope: 'DIRECT',
+        targetId: chatId,
+        senderId: currentUserId,
+        content,
+        messageType,
+        attachment,
+        replyToId,
     });
 
-    // Update chat updatedAt timestamp
-    await prisma.directChat.update({
-        where: { id: chatId },
-        data: { updatedAt: new Date() },
-    });
+    const io = getSocketIo();
+    if (io) {
+        io.to(`direct:${chatId}`).emit('direct:message', message);
+        const recipientId = chat.user1Id === currentUserId ? chat.user2Id : chat.user1Id;
+        io.to(`user:${recipientId}`).emit('direct:notification', { chatId, message });
+    }
 
     ok(res, { message }, 201);
 });
@@ -275,22 +317,139 @@ export const unsendDirectMessage = asyncHandler(async(req, res) => {
 
     const msg = await prisma.directMessage.findUnique({ where: { id: messageId } });
     if (!msg) throw new ApiError(404, 'Message not found');
+    await requireDirectParticipant(msg.chatId, currentUserId, req.user.role === 'ADMIN');
 
-    if (msg.senderId !== currentUserId && req.user.role !== 'ADMIN') {
-        throw new ApiError(403, 'You can only unsend your own messages');
-    }
-
-    const updated = await prisma.directMessage.update({
-        where: { id: messageId },
-        data: {
-            isUnsent: true,
-            unsentAt: new Date(),
-            content: 'This message was unsent',
-        },
-        include: {
-            sender: { select: { id: true, name: true, email: true, avatarUrl: true } },
-        },
+    const updated = await deleteScopedMessageForEveryone({
+        scope: 'DIRECT',
+        messageId,
+        userId: currentUserId,
+        userRole: req.user.role,
     });
 
+    const io = getSocketIo();
+    if (io) {
+        io.to(`direct:${msg.chatId}`).emit('direct:message_unsent', {
+            messageId,
+            message: updated,
+        });
+    }
+
     ok(res, { message: updated });
+});
+
+export const editDirectMessage = asyncHandler(async(req, res) => {
+    const { chatId, messageId } = req.params;
+    await requireDirectParticipant(chatId, req.user.id);
+    const existing = await prisma.directMessage.findUnique({ where: { id: messageId } });
+    if (!existing || existing.chatId !== chatId) {
+        throw new ApiError(404, 'Message not found in this chat');
+    }
+
+    const updated = await editScopedMessage({
+        scope: 'DIRECT',
+        messageId,
+        userId: req.user.id,
+        content: req.body?.content,
+    });
+
+    const io = getSocketIo();
+    if (io) {
+        io.to(`direct:${chatId}`).emit('direct:message_updated', updated);
+    }
+    ok(res, { message: updated });
+});
+
+export const deleteDirectMessageForMe = asyncHandler(async(req, res) => {
+    const { chatId, messageId } = req.params;
+    await requireDirectParticipant(chatId, req.user.id);
+    const existing = await prisma.directMessage.findUnique({ where: { id: messageId } });
+    if (!existing || existing.chatId !== chatId) {
+        throw new ApiError(404, 'Message not found in this chat');
+    }
+
+    const result = await deleteScopedMessageForMe({
+        scope: 'DIRECT',
+        messageId,
+        userId: req.user.id,
+    });
+    ok(res, result);
+});
+
+export const reactDirectMessage = asyncHandler(async(req, res) => {
+    const { chatId, messageId } = req.params;
+    await requireDirectParticipant(chatId, req.user.id);
+    const existing = await prisma.directMessage.findUnique({ where: { id: messageId } });
+    if (!existing || existing.chatId !== chatId) {
+        throw new ApiError(404, 'Message not found in this chat');
+    }
+
+    const result = await toggleScopedReaction({
+        scope: 'DIRECT',
+        messageId,
+        userId: req.user.id,
+        emoji: req.body?.emoji,
+    });
+
+    const io = getSocketIo();
+    if (io) {
+        io.to(`direct:${chatId}`).emit('direct:message_updated', result.message);
+    }
+    ok(res, result);
+});
+
+export const pinDirectMessage = asyncHandler(async(req, res) => {
+    const { chatId, messageId } = req.params;
+    await requireDirectParticipant(chatId, req.user.id);
+    const existing = await prisma.directMessage.findUnique({ where: { id: messageId } });
+    if (!existing || existing.chatId !== chatId) {
+        throw new ApiError(404, 'Message not found in this chat');
+    }
+
+    const updated = await toggleScopedPin({
+        scope: 'DIRECT',
+        messageId,
+        userId: req.user.id,
+        isAllowed: true,
+    });
+
+    const io = getSocketIo();
+    if (io) {
+        io.to(`direct:${chatId}`).emit('direct:message_updated', updated);
+    }
+    ok(res, { message: updated });
+});
+
+export const markDirectChatRead = asyncHandler(async(req, res) => {
+    const { chatId } = req.params;
+    await requireDirectParticipant(chatId, req.user.id);
+    const result = await markScopedMessagesRead({
+        scope: 'DIRECT',
+        targetId: chatId,
+        userId: req.user.id,
+        messageIds: req.body?.messageIds,
+    });
+
+    const io = getSocketIo();
+    if (io && result.messageIds.length > 0) {
+        io.to(`direct:${chatId}`).emit('direct:messages_seen', {
+            chatId,
+            userId: req.user.id,
+            seenAt: result.seenAt,
+            messageIds: result.messageIds,
+        });
+    }
+    ok(res, result);
+});
+
+export const clearDirectConversation = asyncHandler(async(req, res) => {
+    const { chatId } = req.params;
+    await requireDirectParticipant(chatId, req.user.id);
+    const action = req.method === 'DELETE' || req.body?.action === 'DELETE' ? 'DELETE' : 'CLEAR';
+    const preference = await updateConversationPreference({
+        userId: req.user.id,
+        targetType: 'DIRECT',
+        targetId: chatId,
+        action,
+    });
+    ok(res, { preference });
 });

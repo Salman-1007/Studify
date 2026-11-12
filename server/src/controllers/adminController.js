@@ -1,7 +1,9 @@
+import crypto from 'crypto';
 import { prisma } from '../config/db.js';
 import { ApiError } from '../utils/ApiError.js';
 import { ok } from '../utils/response.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
+import { createNotification } from '../services/notificationService.js';
 
 export const listUsers = asyncHandler(async(req, res) => {
     const users = await prisma.user.findMany({
@@ -11,6 +13,7 @@ export const listUsers = asyncHandler(async(req, res) => {
             email: true,
             username: true,
             role: true,
+            teacherStatus: true,
             isActive: true,
             grade: true,
             board: true,
@@ -111,4 +114,102 @@ export const platformStats = asyncHandler(async(req, res) => {
         testAttempts,
         directChats,
     });
+});
+
+export const listPendingTeachers = asyncHandler(async(req, res) => {
+    const teachers = await prisma.user.findMany({
+        where: {
+            OR: [
+                { teacherStatus: 'PENDING' },
+                { role: 'TEACHER' },
+            ],
+        },
+        select: {
+            id: true,
+            name: true,
+            email: true,
+            username: true,
+            role: true,
+            teacherStatus: true,
+            institution: true,
+            createdAt: true,
+        },
+        orderBy: { createdAt: 'desc' },
+    });
+    ok(res, { teachers });
+});
+
+export const approveTeacher = asyncHandler(async(req, res) => {
+    const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!target) throw new ApiError(404, 'User not found');
+
+    const user = await prisma.user.update({
+        where: { id: req.params.id },
+        data: { role: 'TEACHER', teacherStatus: 'APPROVED' },
+        select: { id: true, name: true, email: true, role: true, teacherStatus: true },
+    });
+
+    await createNotification({
+        userId: user.id,
+        type: 'TEACHER_APPROVED',
+        title: 'Educator Account Approved',
+        message: 'Your educator verification has been approved! You can now create classrooms and assign quizzes.',
+        link: '/teacher/dashboard',
+        dedupeKey: `teacher-approved-${user.id}`,
+    });
+
+    ok(res, { user });
+});
+
+export const rejectTeacher = asyncHandler(async(req, res) => {
+    const target = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!target) throw new ApiError(404, 'User not found');
+
+    const user = await prisma.user.update({
+        where: { id: req.params.id },
+        data: { role: 'STUDENT', teacherStatus: 'REJECTED' },
+        select: { id: true, name: true, email: true, role: true, teacherStatus: true },
+    });
+
+    await createNotification({
+        userId: user.id,
+        type: 'TEACHER_REJECTED',
+        title: 'Educator Verification Update',
+        message: 'Your educator verification request was declined. Contact an administrator if you need assistance.',
+        link: '/settings',
+    });
+
+    ok(res, { user });
+});
+
+export const listTeacherInviteCodes = asyncHandler(async(req, res) => {
+    const invites = await prisma.teacherInviteCode.findMany({
+        orderBy: { createdAt: 'desc' },
+    });
+    ok(res, { invites });
+});
+
+export const createTeacherInviteCode = asyncHandler(async(req, res) => {
+    const { email, maxUses = 1, expiresInDays = 14 } = req.body || {};
+    const code = `EDU-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+    const expiresAt = expiresInDays ? new Date(Date.now() + Number(expiresInDays) * 86400000) : null;
+
+    const invite = await prisma.teacherInviteCode.create({
+        data: {
+            code,
+            email: email ? email.trim().toLowerCase() : null,
+            maxUses: Math.max(1, Number(maxUses) || 1),
+            expiresAt,
+            createdById: req.user.id,
+        },
+    });
+    ok(res, { invite }, 201);
+});
+
+export const revokeTeacherInviteCode = asyncHandler(async(req, res) => {
+    const invite = await prisma.teacherInviteCode.update({
+        where: { id: req.params.id },
+        data: { isRevoked: true },
+    });
+    ok(res, { invite });
 });

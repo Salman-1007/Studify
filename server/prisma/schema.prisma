@@ -16,7 +16,35 @@ enum EducationLevel {
 
 enum Role {
   STUDENT
+  TEACHER
   ADMIN
+}
+
+enum TeacherVerificationStatus {
+  NONE
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ClassroomMembershipStatus {
+  ACTIVE
+  REMOVED
+  SUSPENDED
+}
+
+enum QuizAssignmentStatus {
+  DRAFT
+  REVIEWED
+  PUBLISHED
+  ACTIVE
+  CLOSED
+}
+
+enum SubmissionStatus {
+  IN_PROGRESS
+  SUBMITTED
+  TIMED_OUT
 }
 
 enum GroupPrivacy {
@@ -53,33 +81,51 @@ model User {
   board          String?  @default("Punjab")
   level          Int      @default(1)
   institution    String?
-  avatarUrl      String?
-  role           Role     @default(STUDENT)
-  isActive       Boolean  @default(true)
-  points         Int      @default(0)
-  streakCount    Int      @default(0)
-  lastStudyDate  DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  avatarUrl        String?
+  role             Role     @default(STUDENT)
+  teacherStatus    TeacherVerificationStatus @default(NONE)
+  themePreference  String?  @default("dark")
+  lastSeenAt       DateTime?
+  showOnlineStatus Boolean  @default(true)
+  isActive         Boolean  @default(true)
+  points           Int      @default(0)
+  streakCount      Int      @default(0)
+  lastStudyDate    DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  refreshTokens       RefreshToken[]
-  conversations       Conversation[]
-  materials           Material[]
-  quizzesCreated      Quiz[]              @relation("QuizCreator")
-  quizAttempts        QuizAttempt[]
-  flashcardDecks      FlashcardDeck[]
-  ownedGroups         StudyGroup[]        @relation("GroupOwner")
-  groupMemberships    GroupMember[]
-  groupMessages       GroupMessage[]
-  groupQuizAttempts   GroupQuizParticipant[]
-  notifications       Notification[]
-  achievements        UserAchievement[]
-  studySessions       StudySession[]
-  topicPerformances   UserTopicPerformance[]
-  standardTestAttempts StandardTestAttempt[]
-  directChatsAsUser1  DirectChat[]        @relation("DirectChatUser1")
-  directChatsAsUser2  DirectChat[]        @relation("DirectChatUser2")
-  sentDirectMessages  DirectMessage[]
+  refreshTokens               RefreshToken[]
+  conversations               Conversation[]
+  materials                   Material[]
+  quizzesCreated              Quiz[]                    @relation("QuizCreator")
+  quizAttempts                QuizAttempt[]
+  flashcardDecks              FlashcardDeck[]
+  ownedGroups                 StudyGroup[]              @relation("GroupOwner")
+  groupMemberships            GroupMember[]
+  groupMessages               GroupMessage[]
+  groupQuizAttempts           GroupQuizParticipant[]
+  notifications               Notification[]
+  achievements                UserAchievement[]
+  studySessions               StudySession[]
+  topicPerformances           UserTopicPerformance[]
+  standardTestAttempts        StandardTestAttempt[]
+  directChatsAsUser1          DirectChat[]              @relation("DirectChatUser1")
+  directChatsAsUser2          DirectChat[]              @relation("DirectChatUser2")
+  sentDirectMessages          DirectMessage[]
+  ownedClassrooms             Classroom[]               @relation("ClassroomTeacher")
+  classroomMemberships        ClassroomMembership[]
+  classroomInvitationsCreated ClassroomInvitation[]     @relation("ClassroomInviteCreator")
+  classroomAnnouncements      ClassroomAnnouncement[]
+  quizAssignmentsCreated      ClassroomQuizAssignment[] @relation("AssignmentCreator")
+  quizSubmissions             QuizSubmission[]
+  teacherInvitesCreated       TeacherInviteCode[]       @relation("TeacherInviteCreator")
+  groupMessageReactions       GroupMessageReaction[]
+  groupMessageDeletions       GroupMessageDeletion[]
+  groupMessageReceipts        GroupMessageReceipt[]
+  directMessageReactions      DirectMessageReaction[]
+  directMessageDeletions      DirectMessageDeletion[]
+  directMessageReceipts       DirectMessageReceipt[]
+  conversationPreferences     ConversationPreference[]
 }
 
 model RefreshToken {
@@ -148,21 +194,28 @@ model MaterialChunk {
 }
 
 model Quiz {
-  id          String         @id @default(uuid())
-  title       String
-  topic       String
-  subject     String?
-  difficulty  QuizDifficulty @default(MEDIUM)
-  creatorId   String
-  creator     User           @relation("QuizCreator", fields: [creatorId], references: [id], onDelete: Cascade)
-  materialId  String?
-  material    Material?      @relation(fields: [materialId], references: [id])
-  source      String         @default("ai")
-  createdAt   DateTime       @default(now())
+  id            String               @id @default(uuid())
+  title         String
+  topic         String
+  subject       String?
+  description   String?
+  difficulty    QuizDifficulty       @default(MEDIUM)
+  creatorId     String
+  creator       User                 @relation("QuizCreator", fields: [creatorId], references: [id], onDelete: Cascade)
+  materialId    String?
+  material      Material?            @relation(fields: [materialId], references: [id])
+  source        String               @default("ai")
+  status        QuizAssignmentStatus @default(PUBLISHED)
+  version       Int                  @default(1)
+  isTeacherQuiz Boolean              @default(false)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @default(now()) @updatedAt
 
-  questions   Question[]
-  attempts    QuizAttempt[]
+  questions    Question[]
+  attempts     QuizAttempt[]
   groupQuizzes GroupQuiz[]
+  assignments  ClassroomQuizAssignment[]
+  submissions  QuizSubmission[]
 
   @@index([creatorId])
 }
@@ -261,9 +314,10 @@ model StudyGroup {
   owner       User         @relation("GroupOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   createdAt   DateTime     @default(now())
 
-  members    GroupMember[]
-  messages   GroupMessage[]
+  members      GroupMember[]
+  messages     GroupMessage[]
   groupQuizzes GroupQuiz[]
+  classroom    Classroom?
 
   @@index([ownerId])
 }
@@ -282,17 +336,33 @@ model GroupMember {
 }
 
 model GroupMessage {
-  id        String     @id @default(uuid())
-  groupId   String
-  group     StudyGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  senderId  String
-  sender    User       @relation(fields: [senderId], references: [id], onDelete: Cascade)
-  content   String
-  isUnsent  Boolean    @default(false)
-  unsentAt  DateTime?
-  createdAt DateTime   @default(now())
+  id                   String                 @id @default(uuid())
+  groupId              String
+  group                StudyGroup             @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  senderId             String
+  sender               User                   @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  content              String
+  messageType          String                 @default("TEXT")
+  attachment           Json?
+  replyToId            String?
+  replyTo              GroupMessage?          @relation("GroupMessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies              GroupMessage[]         @relation("GroupMessageReplies")
+  editedAt             DateTime?
+  isUnsent             Boolean                @default(false)
+  unsentAt             DateTime?
+  deletedForEveryoneAt DateTime?
+  deletedById          String?
+  isPinned             Boolean                @default(false)
+  pinnedAt             DateTime?
+  pinnedById           String?
+  createdAt            DateTime               @default(now())
 
-  @@index([groupId])
+  reactions            GroupMessageReaction[]
+  deletions            GroupMessageDeletion[]
+  receipts             GroupMessageReceipt[]
+
+  @@index([groupId, createdAt])
+  @@index([replyToId])
 }
 
 model GroupQuiz {
@@ -330,11 +400,16 @@ model Notification {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   type      String
+  title     String?
   message   String
+  link      String?
+  metadata  Json?
+  dedupeKey String?
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
 
-  @@index([userId])
+  @@index([userId, isRead])
+  @@index([userId, dedupeKey])
 }
 
 model Achievement {
@@ -579,18 +654,34 @@ model DirectChat {
 }
 
 model DirectMessage {
-  id         String     @id @default(uuid())
-  chatId     String
-  chat       DirectChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
-  senderId   String
-  sender     User       @relation(fields: [senderId], references: [id], onDelete: Cascade)
-  content    String
-  isUnsent   Boolean    @default(false)
-  unsentAt   DateTime?
-  createdAt  DateTime   @default(now())
+  id                   String                  @id @default(uuid())
+  chatId               String
+  chat                 DirectChat              @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  senderId             String
+  sender               User                    @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  content              String
+  messageType          String                  @default("TEXT")
+  attachment           Json?
+  replyToId            String?
+  replyTo              DirectMessage?          @relation("DirectMessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies              DirectMessage[]         @relation("DirectMessageReplies")
+  editedAt             DateTime?
+  isUnsent             Boolean                 @default(false)
+  unsentAt             DateTime?
+  deletedForEveryoneAt DateTime?
+  deletedById          String?
+  isPinned             Boolean                 @default(false)
+  pinnedAt             DateTime?
+  pinnedById           String?
+  createdAt            DateTime                @default(now())
 
-  @@index([chatId])
+  reactions            DirectMessageReaction[]
+  deletions            DirectMessageDeletion[]
+  receipts             DirectMessageReceipt[]
+
+  @@index([chatId, createdAt])
   @@index([senderId])
+  @@index([replyToId])
 }
 
 model QuestionPack {
@@ -605,4 +696,238 @@ model QuestionPack {
   downloads      Int      @default(0)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+}
+
+model TeacherInviteCode {
+  id          String    @id @default(uuid())
+  code        String    @unique
+  email       String?
+  maxUses     Int       @default(1)
+  usedCount   Int       @default(0)
+  expiresAt   DateTime?
+  isRevoked   Boolean   @default(false)
+  createdById String?
+  createdBy   User?     @relation("TeacherInviteCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+
+  @@index([code])
+}
+
+model Classroom {
+  id          String   @id @default(uuid())
+  name        String
+  subject     String?
+  description String?
+  classGrade  String?
+  board       String?
+  joinCode    String   @unique
+  isArchived  Boolean  @default(false)
+  teacherId   String
+  teacher     User     @relation("ClassroomTeacher", fields: [teacherId], references: [id], onDelete: Cascade)
+  groupId     String?  @unique
+  group       StudyGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  memberships   ClassroomMembership[]
+  invitations   ClassroomInvitation[]
+  announcements ClassroomAnnouncement[]
+  assignments   ClassroomQuizAssignment[]
+
+  @@index([teacherId, isArchived])
+}
+
+model ClassroomMembership {
+  id          String                    @id @default(uuid())
+  classroomId String
+  classroom   Classroom                 @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status      ClassroomMembershipStatus @default(ACTIVE)
+  joinedAt    DateTime                  @default(now())
+  removedAt   DateTime?
+
+  @@unique([classroomId, userId])
+  @@index([userId, status])
+  @@index([classroomId, status])
+}
+
+model ClassroomInvitation {
+  id          String    @id @default(uuid())
+  classroomId String
+  classroom   Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  token       String    @unique
+  email       String?
+  createdById String
+  createdBy   User      @relation("ClassroomInviteCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  expiresAt   DateTime?
+  maxUses     Int?
+  usedCount   Int       @default(0)
+  isRevoked   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  @@index([classroomId, isRevoked])
+}
+
+model ClassroomAnnouncement {
+  id          String    @id @default(uuid())
+  classroomId String
+  classroom   Classroom @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  authorId    String
+  author      User      @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  title       String?
+  content     String
+  isPinned    Boolean   @default(false)
+  pinnedAt    DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([classroomId, isPinned, createdAt])
+}
+
+model ClassroomQuizAssignment {
+  id                 String               @id @default(uuid())
+  classroomId        String
+  classroom          Classroom            @relation(fields: [classroomId], references: [id], onDelete: Cascade)
+  quizId             String
+  quiz               Quiz                 @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  createdById        String
+  createdBy          User                 @relation("AssignmentCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  title              String?
+  instructions       String?
+  status             QuizAssignmentStatus @default(DRAFT)
+  quizVersion        Int                  @default(1)
+  questionSnapshot   Json?
+  startsAt           DateTime?
+  deadline           DateTime?
+  durationSecs       Int?
+  maxAttempts        Int                  @default(1)
+  randomizeQuestions Boolean              @default(false)
+  publishedAt        DateTime?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  submissions        QuizSubmission[]
+
+  @@index([classroomId, status])
+  @@index([quizId])
+  @@index([createdById])
+}
+
+model QuizSubmission {
+  id              String                  @id @default(uuid())
+  assignmentId    String
+  assignment      ClassroomQuizAssignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  quizId          String
+  quiz            Quiz                    @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attemptNumber   Int                     @default(1)
+  status          SubmissionStatus        @default(IN_PROGRESS)
+  questionOrder   Json?
+  answersSnapshot Json?
+  score           Int                     @default(0)
+  totalQuestions  Int
+  percentage      Float                   @default(0)
+  accuracy        Float                   @default(0)
+  timeTakenSecs   Int                     @default(0)
+  startedAt       DateTime                @default(now())
+  submittedAt     DateTime?
+  createdAt       DateTime                @default(now())
+
+  @@unique([assignmentId, userId, attemptNumber])
+  @@index([assignmentId, status, score])
+  @@index([userId])
+}
+
+model GroupMessageReaction {
+  id        String       @id @default(uuid())
+  messageId String
+  message   GroupMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emoji     String
+  createdAt DateTime     @default(now())
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+}
+
+model GroupMessageDeletion {
+  id        String       @id @default(uuid())
+  messageId String
+  message   GroupMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deletedAt DateTime     @default(now())
+
+  @@unique([messageId, userId])
+  @@index([userId])
+}
+
+model GroupMessageReceipt {
+  id          String       @id @default(uuid())
+  messageId   String
+  message     GroupMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveredAt DateTime     @default(now())
+  seenAt      DateTime?
+
+  @@unique([messageId, userId])
+  @@index([userId])
+}
+
+model DirectMessageReaction {
+  id        String        @id @default(uuid())
+  messageId String
+  message   DirectMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emoji     String
+  createdAt DateTime      @default(now())
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+}
+
+model DirectMessageDeletion {
+  id        String        @id @default(uuid())
+  messageId String
+  message   DirectMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deletedAt DateTime      @default(now())
+
+  @@unique([messageId, userId])
+  @@index([userId])
+}
+
+model DirectMessageReceipt {
+  id          String        @id @default(uuid())
+  messageId   String
+  message     DirectMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveredAt DateTime      @default(now())
+  seenAt      DateTime?
+
+  @@unique([messageId, userId])
+  @@index([userId])
+}
+
+model ConversationPreference {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  targetType String    // "GROUP" | "DIRECT"
+  targetId   String
+  clearedAt  DateTime?
+  deletedAt  DateTime?
+  archivedAt DateTime?
+  lastReadAt DateTime?
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([userId, targetType, targetId])
+  @@index([userId, targetType])
 }

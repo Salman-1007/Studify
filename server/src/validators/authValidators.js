@@ -8,26 +8,36 @@ export const signupSchema = z.object({
     email: z.string().email('Invalid email address'),
     password: z.string().min(8, 'Password must be at least 8 characters'),
     confirmPassword: z.string().optional(),
+    accountType: z.enum(['STUDENT', 'TEACHER']).optional().default('STUDENT'),
+    teacherInviteCode: z.string().trim().optional(),
     class: z.union([z.string(), z.number()]).optional(),
     grade: z.union([z.string(), z.number()]).optional(),
-    board: z.string().min(1, 'Board is required'),
+    board: z.string().optional(),
     username: z.string().min(3).regex(/^[a-zA-Z0-9_]+$/, 'Username must be alphanumeric').optional(),
     institution: z.string().optional(),
     educationLevel: z.enum(['SCHOOL', 'COLLEGE', 'UNIVERSITY', 'OTHER']).optional(),
 }).transform((data) => {
-    // Normalize class/grade:
+    const accountType = data.accountType || 'STUDENT';
     let rawClass = data.class !== undefined ? String(data.class).trim() : (data.grade !== undefined ? String(data.grade).trim() : '');
     const upper = rawClass.toUpperCase();
     if (upper === 'MCAT' || upper === 'MDCAT') rawClass = 'MDCAT';
     else if (upper === 'ECAT') rawClass = 'ECAT';
+    const board = data.board !== undefined ? data.board.trim() : (accountType === 'TEACHER' ? 'Punjab' : '');
     return {
         ...data,
-        grade: rawClass,
+        accountType,
+        grade: rawClass || (accountType === 'TEACHER' ? '9' : ''),
+        board,
     };
-}).refine((data) => SUPPORTED_CLASSES.includes(data.grade), {
+}).refine((data) => {
+    if (data.accountType === 'TEACHER' && !data.grade) return true;
+    return SUPPORTED_CLASSES.includes(data.grade);
+}, {
     message: 'Class must be 9, 10, 11, 12, MDCAT, or ECAT',
     path: ['class'],
 }).refine((data) => {
+    if (data.accountType === 'TEACHER' && !data.board) return true;
+    if (!data.board) return false;
     const norm = data.board.trim().toLowerCase();
     return SUPPORTED_BOARDS.some((b) => b.toLowerCase() === norm);
 }, {
@@ -72,6 +82,8 @@ export const profileUpdateSchema = z.object({
     board: z.string().optional(),
     institution: z.string().optional(),
     educationLevel: z.enum(['SCHOOL', 'COLLEGE', 'UNIVERSITY', 'OTHER']).optional(),
+    themePreference: z.enum(['dark', 'light', 'system']).optional(),
+    showOnlineStatus: z.boolean().optional(),
 }).refine((data) => {
     const c = data.class !== undefined ? String(data.class) : (data.grade !== undefined ? String(data.grade) : undefined);
     if (c === undefined) return true;

@@ -26,6 +26,8 @@ import standardTestRoutes from './routes/standardTestRoutes.js';
 import directChatRoutes from './routes/directChatRoutes.js';
 import questionPackRoutes from './routes/questionPackRoutes.js';
 import dailyArenaRoutes from './routes/dailyArenaRoutes.js';
+import classroomRoutes from './routes/classroomRoutes.js';
+import teacherRoutes from './routes/teacherRoutes.js';
 import { memoryCache } from './utils/cache.js';
 import { notFound, errorHandler } from './middleware/errorHandler.js';
 import { registerGroupChat } from './sockets/groupChat.js';
@@ -110,6 +112,8 @@ export const createApp = () => {
     app.use('/api/notifications', notificationRoutes);
     app.use('/api/admin', adminRoutes);
     app.use('/api/daily-arena', dailyArenaRoutes);
+    app.use('/api/classrooms', classroomRoutes);
+    app.use('/api/teacher', teacherRoutes);
 
     app.use(notFound);
     app.use(errorHandler);

@@ -47,8 +47,13 @@ export default function QuizResults() {
       </div>
 
       <div className="flex gap-3">
-        <button onClick={() => navigate(`/quizzes/${id}`)} className="text-sm px-4 py-2 rounded-lg border border-slate-700">Retry</button>
-        <button onClick={() => navigate('/quizzes')} className="text-sm px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 font-medium">Back to quizzes</button>
+        <button onClick={() => navigate(`/quizzes/${id}`)} className="text-sm px-4 py-2 rounded-lg border border-slate-700 cursor-pointer">Retry</button>
+        <button
+          onClick={() => navigate(state.assignmentId ? '/classrooms' : '/quizzes')}
+          className="text-sm px-4 py-2 rounded-lg bg-blue-500 hover:bg-blue-600 font-medium text-white cursor-pointer"
+        >
+          {state.assignmentId ? 'Back to Classrooms' : 'Back to quizzes'}
+        </button>
       </div>
     </div>
   );

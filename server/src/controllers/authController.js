@@ -45,12 +45,28 @@ export const publicUser = (u) => ({
     institution: u.institution,
     avatarUrl: u.avatarUrl,
     role: u.role,
+    teacherStatus: u.teacherStatus || 'NONE',
+    themePreference: u.themePreference || 'dark',
+    showOnlineStatus: u.showOnlineStatus !== false,
+    lastSeenAt: u.lastSeenAt || null,
     createdAt: u.createdAt,
     updatedAt: u.updatedAt,
 });
 
 export const signup = asyncHandler(async(req, res) => {
-    const { name, email, password, grade, class: classVal, board, institution, educationLevel, username } = req.body;
+    const {
+        name,
+        email,
+        password,
+        grade,
+        class: classVal,
+        board,
+        institution,
+        educationLevel,
+        username,
+        accountType = 'STUDENT',
+        teacherInviteCode,
+    } = req.body;
     const normalizedEmail = email.toLowerCase().trim();
 
     const existingEmail = await prisma.user.findUnique({ where: { email: normalizedEmail } });
@@ -76,6 +92,37 @@ export const signup = asyncHandler(async(req, res) => {
         if (existingUsername) throw new ApiError(409, 'Username is already in use');
     }
 
+    // Secure educator onboarding: never grant TEACHER role from an untrusted client field alone.
+    let assignedRole = 'STUDENT';
+    let teacherStatus = 'NONE';
+    let inviteRecordId = null;
+
+    if (accountType === 'TEACHER') {
+        const code = teacherInviteCode?.trim();
+        if (code) {
+            const envCode = process.env.TEACHER_INVITE_CODE?.trim();
+            if (envCode && code === envCode) {
+                assignedRole = 'TEACHER';
+                teacherStatus = 'APPROVED';
+            } else {
+                const invite = await prisma.teacherInviteCode.findUnique({ where: { code } });
+                const isExpired = invite?.expiresAt && new Date(invite.expiresAt) < new Date();
+                const isExhausted = invite && invite.usedCount >= invite.maxUses;
+                const emailMismatch = invite?.email && invite.email.toLowerCase() !== normalizedEmail;
+                if (!invite || invite.isRevoked || isExpired || isExhausted || emailMismatch) {
+                    throw new ApiError(403, 'Invalid or expired educator invitation code');
+                }
+                assignedRole = 'TEACHER';
+                teacherStatus = 'APPROVED';
+                inviteRecordId = invite.id;
+            }
+        } else {
+            // Account created as STUDENT with pending educator verification until admin approval
+            assignedRole = 'STUDENT';
+            teacherStatus = 'PENDING';
+        }
+    }
+
     const passwordHash = await bcrypt.hash(password, 10);
     const edLevel = educationLevel || (['9', '10'].includes(assignedGrade) ? 'SCHOOL' : 'COLLEGE');
 
@@ -89,15 +136,28 @@ export const signup = asyncHandler(async(req, res) => {
             board: board ? board.trim() : 'Punjab',
             educationLevel: edLevel,
             institution: institution ? institution.trim() : null,
+            role: assignedRole,
+            teacherStatus,
             level: 1,
             points: 0,
             streakCount: 0,
         },
     });
 
+    if (inviteRecordId) {
+        await prisma.teacherInviteCode.update({
+            where: { id: inviteRecordId },
+            data: { usedCount: { increment: 1 } },
+        });
+    }
+
     const { accessToken, refreshToken } = await issueTokens(user.id);
     setRefreshCookie(res, refreshToken);
-    ok(res, { user: publicUser(user), accessToken }, 201);
+    ok(res, {
+        user: publicUser(user),
+        accessToken,
+        pendingTeacherApproval: teacherStatus === 'PENDING',
+    }, 201);
 });
 
 export const register = asyncHandler(async(req, res) => {

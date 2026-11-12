@@ -6,9 +6,16 @@ const matches = (row, where = {}) => {
     return Object.entries(where).every(([key, cond]) => {
         if (key === 'OR') return cond.some((sub) => matches(row, sub));
         if (key === 'AND') return cond.every((sub) => matches(row, sub));
-        if (cond && typeof cond === 'object' && !Array.isArray(cond)) {
-            if ('not' in cond) return row[key] !== cond.not;
+        if (cond && typeof cond === 'object' && !Array.isArray(cond) && !(cond instanceof Date)) {
+            if ('in' in cond) return cond.in.includes(row[key]);
+            if ('notIn' in cond) return !cond.notIn.includes(row[key]);
+            if ('not' in cond) {
+                if (cond.not === null) return row[key] !== null && row[key] !== undefined;
+                return row[key] !== cond.not;
+            }
+            if ('lt' in cond) return new Date(row[key]) < new Date(cond.lt);
             if ('lte' in cond) return new Date(row[key]) <= new Date(cond.lte);
+            if ('gt' in cond) return new Date(row[key]) > new Date(cond.gt);
             if ('gte' in cond) return new Date(row[key]) >= new Date(cond.gte);
             if ('contains' in cond) return (row[key] || '').toLowerCase().includes(String(cond.contains).toLowerCase());
             if ('mode' in cond && cond.mode === 'insensitive' && 'contains' in cond) {
@@ -23,7 +30,21 @@ const matches = (row, where = {}) => {
 const resolveWhere = (where) => {
     const flat = {};
     for (const [k, v] of Object.entries(where || {})) {
-        if (v && typeof v === 'object' && !Array.isArray(v) && !('not' in v) && !('lte' in v) && !('gte' in v) && !('contains' in v) && k.includes('_')) {
+        if (
+            v &&
+            typeof v === 'object' &&
+            !Array.isArray(v) &&
+            !(v instanceof Date) &&
+            !('not' in v) &&
+            !('in' in v) &&
+            !('notIn' in v) &&
+            !('lt' in v) &&
+            !('lte' in v) &&
+            !('gt' in v) &&
+            !('gte' in v) &&
+            !('contains' in v) &&
+            k.includes('_')
+        ) {
             Object.assign(flat, v);
         } else {
             flat[k] = v;
@@ -33,10 +54,11 @@ const resolveWhere = (where) => {
 };
 
 const DEFAULTS = {
-    user: { role: 'STUDENT', isActive: true, points: 0, streakCount: 0, educationLevel: 'OTHER', board: 'Punjab', level: 1 },
+    user: { role: 'STUDENT', teacherStatus: 'NONE', themePreference: 'dark', showOnlineStatus: true, isActive: true, points: 0, streakCount: 0, educationLevel: 'OTHER', board: 'Punjab', level: 1 },
     groupMember: { role: 'MEMBER' },
     studyGroup: { privacy: 'PUBLIC' },
-    quiz: { difficulty: 'MEDIUM', source: 'ai' },
+    groupMessage: { isUnsent: false, messageType: 'TEXT', isPinned: false },
+    quiz: { difficulty: 'MEDIUM', source: 'ai', status: 'PUBLISHED', version: 1, isTeacherQuiz: false },
     flashcard: { interval: 1 },
     notification: { isRead: false },
     groupQuiz: { status: 'pending' },
@@ -44,8 +66,15 @@ const DEFAULTS = {
     standardTestAttempt: { score: 0, totalQuestions: 0, percentage: 0, correctCount: 0, wrongCount: 0, unansweredCount: 0, timeTakenSecs: 0, isSubmitted: false },
     standardQuestionAttempt: { isCorrect: false },
     directChat: { status: 'PENDING' },
-    directMessage: { isUnsent: false },
+    directMessage: { isUnsent: false, messageType: 'TEXT', isPinned: false },
     questionPack: { downloads: 0, isPublished: true },
+    teacherInviteCode: { maxUses: 1, usedCount: 0, isRevoked: false },
+    classroom: { isArchived: false },
+    classroomMembership: { status: 'ACTIVE' },
+    classroomInvitation: { usedCount: 0, isRevoked: false },
+    classroomAnnouncement: { isPinned: false },
+    classroomQuizAssignment: { status: 'DRAFT', quizVersion: 1, maxAttempts: 1, randomizeQuestions: false },
+    quizSubmission: { attemptNumber: 1, status: 'IN_PROGRESS', score: 0, percentage: 0, accuracy: 0, timeTakenSecs: 0 },
 };
 
 const NESTED_RELATIONS = {
@@ -81,12 +110,37 @@ const RELATIONS_MAP = {
         question: { table: 'questionBankItem', key: 'questionId', targetKey: 'id', single: true },
         testAttempt: { table: 'standardTestAttempt', key: 'testAttemptId', targetKey: 'id', single: true },
     },
+    quiz: {
+        questions: { table: 'question', key: 'id', targetKey: 'quizId', single: false },
+        creator: { table: 'user', key: 'creatorId', targetKey: 'id', single: true },
+        assignments: { table: 'classroomQuizAssignment', key: 'id', targetKey: 'quizId', single: false },
+    },
     quizAttempt: {
         questionAttempts: { table: 'questionAttempt', key: 'id', targetKey: 'quizAttemptId', single: false },
         quiz: { table: 'quiz', key: 'quizId', targetKey: 'id', single: true },
     },
     questionAttempt: {
         question: { table: 'question', key: 'questionId', targetKey: 'id', single: true },
+    },
+    studyGroup: {
+        members: { table: 'groupMember', key: 'id', targetKey: 'groupId', single: false },
+        owner: { table: 'user', key: 'ownerId', targetKey: 'id', single: true },
+        classroom: { table: 'classroom', key: 'id', targetKey: 'groupId', single: true },
+    },
+    groupMember: {
+        user: { table: 'user', key: 'userId', targetKey: 'id', single: true },
+        group: { table: 'studyGroup', key: 'groupId', targetKey: 'id', single: true },
+    },
+    groupMessage: {
+        sender: { table: 'user', key: 'senderId', targetKey: 'id', single: true },
+        group: { table: 'studyGroup', key: 'groupId', targetKey: 'id', single: true },
+        replyTo: { table: 'groupMessage', key: 'replyToId', targetKey: 'id', single: true },
+        reactions: { table: 'groupMessageReaction', key: 'id', targetKey: 'messageId', single: false },
+        deletions: { table: 'groupMessageDeletion', key: 'id', targetKey: 'messageId', single: false },
+        receipts: { table: 'groupMessageReceipt', key: 'id', targetKey: 'messageId', single: false },
+    },
+    groupMessageReaction: {
+        user: { table: 'user', key: 'userId', targetKey: 'id', single: true },
     },
     directChat: {
         user1: { table: 'user', key: 'user1Id', targetKey: 'id', single: true },
@@ -96,6 +150,44 @@ const RELATIONS_MAP = {
     directMessage: {
         chat: { table: 'directChat', key: 'chatId', targetKey: 'id', single: true },
         sender: { table: 'user', key: 'senderId', targetKey: 'id', single: true },
+        replyTo: { table: 'directMessage', key: 'replyToId', targetKey: 'id', single: true },
+        reactions: { table: 'directMessageReaction', key: 'id', targetKey: 'messageId', single: false },
+        deletions: { table: 'directMessageDeletion', key: 'id', targetKey: 'messageId', single: false },
+        receipts: { table: 'directMessageReceipt', key: 'id', targetKey: 'messageId', single: false },
+    },
+    directMessageReaction: {
+        user: { table: 'user', key: 'userId', targetKey: 'id', single: true },
+    },
+    classroom: {
+        teacher: { table: 'user', key: 'teacherId', targetKey: 'id', single: true },
+        group: { table: 'studyGroup', key: 'groupId', targetKey: 'id', single: true },
+        memberships: { table: 'classroomMembership', key: 'id', targetKey: 'classroomId', single: false },
+        invitations: { table: 'classroomInvitation', key: 'id', targetKey: 'classroomId', single: false },
+        announcements: { table: 'classroomAnnouncement', key: 'id', targetKey: 'classroomId', single: false },
+        assignments: { table: 'classroomQuizAssignment', key: 'id', targetKey: 'classroomId', single: false },
+    },
+    classroomMembership: {
+        user: { table: 'user', key: 'userId', targetKey: 'id', single: true },
+        classroom: { table: 'classroom', key: 'classroomId', targetKey: 'id', single: true },
+    },
+    classroomInvitation: {
+        classroom: { table: 'classroom', key: 'classroomId', targetKey: 'id', single: true },
+        createdBy: { table: 'user', key: 'createdById', targetKey: 'id', single: true },
+    },
+    classroomAnnouncement: {
+        author: { table: 'user', key: 'authorId', targetKey: 'id', single: true },
+        classroom: { table: 'classroom', key: 'classroomId', targetKey: 'id', single: true },
+    },
+    classroomQuizAssignment: {
+        classroom: { table: 'classroom', key: 'classroomId', targetKey: 'id', single: true },
+        quiz: { table: 'quiz', key: 'quizId', targetKey: 'id', single: true },
+        createdBy: { table: 'user', key: 'createdById', targetKey: 'id', single: true },
+        submissions: { table: 'quizSubmission', key: 'id', targetKey: 'assignmentId', single: false },
+    },
+    quizSubmission: {
+        user: { table: 'user', key: 'userId', targetKey: 'id', single: true },
+        assignment: { table: 'classroomQuizAssignment', key: 'assignmentId', targetKey: 'id', single: true },
+        quiz: { table: 'quiz', key: 'quizId', targetKey: 'id', single: true },
     },
 };
 
@@ -232,6 +324,17 @@ export const createFakePrisma = () => {
             const [row] = get(name).splice(idx, 1);
             return row;
         },
+        deleteMany: async({ where } = {}) => {
+            const table = get(name);
+            const remaining = [];
+            let count = 0;
+            for (const r of table) {
+                if (matches(r, resolveWhere(where))) count++;
+                else remaining.push(r);
+            }
+            tables[name] = remaining;
+            return { count };
+        },
         count: async({ where } = {}) => get(name).filter((r) => matches(r, resolveWhere(where))).length,
     });
 
@@ -244,6 +347,11 @@ export const createFakePrisma = () => {
         'board', 'curriculumSubject', 'curriculumChapter', 'curriculumTopic',
         'questionBankItem', 'standardTestAttempt', 'standardQuestionAttempt',
         'directChat', 'directMessage', 'questionPack',
+        'teacherInviteCode', 'classroom', 'classroomMembership', 'classroomInvitation',
+        'classroomAnnouncement', 'classroomQuizAssignment', 'quizSubmission',
+        'groupMessageReaction', 'groupMessageDeletion', 'groupMessageReceipt',
+        'directMessageReaction', 'directMessageDeletion', 'directMessageReceipt',
+        'conversationPreference',
     ];
 
     const prisma = {

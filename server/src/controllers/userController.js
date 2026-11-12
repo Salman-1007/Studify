@@ -116,6 +116,10 @@ export const getProfile = asyncHandler(async(req, res) => {
             streakCount: user.streakCount || 0,
             institution: user.institution,
             avatarUrl: user.avatarUrl,
+            role: user.role,
+            teacherStatus: user.teacherStatus || 'NONE',
+            themePreference: user.themePreference || 'dark',
+            showOnlineStatus: user.showOnlineStatus !== false,
         },
         stats: {
             quizzesCompleted,
@@ -139,7 +143,7 @@ export const getProfile = asyncHandler(async(req, res) => {
 });
 
 export const updateProfile = asyncHandler(async(req, res) => {
-    const { name, grade, class: classVal, board, institution, educationLevel } = req.body;
+    const { name, grade, class: classVal, board, institution, educationLevel, themePreference, showOnlineStatus } = req.body;
 
     const updateData = {};
     if (name !== undefined) {
@@ -166,6 +170,15 @@ export const updateProfile = asyncHandler(async(req, res) => {
 
     if (institution !== undefined) updateData.institution = institution ? institution.trim() : null;
     if (educationLevel !== undefined) updateData.educationLevel = educationLevel;
+    if (themePreference !== undefined) {
+        if (!['dark', 'light', 'system'].includes(themePreference)) {
+            throw new ApiError(400, 'themePreference must be dark, light, or system');
+        }
+        updateData.themePreference = themePreference;
+    }
+    if (showOnlineStatus !== undefined) {
+        updateData.showOnlineStatus = Boolean(showOnlineStatus);
+    }
 
     const user = await prisma.user.update({
         where: { id: req.user.id },
@@ -189,6 +202,10 @@ export const updateProfile = asyncHandler(async(req, res) => {
             streakCount: user.streakCount || 0,
             institution: user.institution,
             avatarUrl: user.avatarUrl,
+            role: user.role,
+            teacherStatus: user.teacherStatus || 'NONE',
+            themePreference: user.themePreference || 'dark',
+            showOnlineStatus: user.showOnlineStatus !== false,
         },
     });
 });

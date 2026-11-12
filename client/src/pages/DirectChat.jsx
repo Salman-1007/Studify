@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { io } from 'socket.io-client';
 import {
   MessageSquare,
@@ -7,57 +7,66 @@ import {
   Send,
   UserPlus,
   Check,
-  X,
   Trash2,
-  Clock,
-  ShieldCheck,
-  Sparkles,
-  AlertCircle,
-  MoreVertical,
+  Paperclip,
+  Eraser,
+  X,
 } from 'lucide-react';
 import { api, getAccessToken, SOCKET_URL } from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import Skeleton from '../components/Skeleton.jsx';
+import ChatMessageList, { ReplyComposerBanner } from '../components/ChatMessageList.jsx';
+import ShareStudyModal from '../components/ShareStudyModal.jsx';
+
+const formatLastSeen = (presence) => {
+  if (!presence || !presence.showOnlineStatus) return 'Online status hidden';
+  if (presence.online) return 'Online';
+  if (!presence.lastSeenAt) return 'Offline';
+  return `Last seen ${new Date(presence.lastSeenAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+};
 
 export default function DirectChat() {
   const { user } = useAuth();
   const { showToast } = useToast();
-  const queryClient = useQueryClient();
+  const currentUserId = user?.id || user?._id;
 
   const [selectedChatId, setSelectedChatId] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [partnerPresence, setPartnerPresence] = useState(null);
   const [input, setInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [connected, setConnected] = useState(false);
+  const [msgSearchOpen, setMsgSearchOpen] = useState(false);
+  const [msgSearch, setMsgSearch] = useState('');
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [pendingAttachment, setPendingAttachment] = useState(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [typingPartner, setTypingPartner] = useState(null);
 
   const socketRef = useRef(null);
   const bottomRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
 
-  // Fetch list of direct chats
   const { data: chats = [], isLoading: loadingChats, refetch: refetchChats } = useQuery({
     queryKey: ['direct-chats'],
     queryFn: () => api.get('/direct-chats').then((r) => r.data.data.chats),
     refetchInterval: 15000,
   });
 
-  // Search users for new chat
   const { data: searchResults = [], isFetching: searching } = useQuery({
     queryKey: ['search-users', searchQuery],
-    queryFn: () => api.get(`/direct-chats/search-users?q=${encodeURIComponent(searchQuery)}`).then((r) => r.data.data.users),
+    queryFn: () =>
+      api.get(`/direct-chats/search-users?q=${encodeURIComponent(searchQuery)}`).then((r) => r.data.data.users),
     enabled: searchQuery.trim().length >= 2,
   });
 
-  // Selected chat details
   const selectedChat = chats.find((c) => c.id === selectedChatId) || null;
 
-  // Socket connection
   useEffect(() => {
     const socket = io(SOCKET_URL, { auth: { token: getAccessToken() } });
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      setConnected(true);
       if (selectedChatId) {
         socket.emit('direct:join', { chatId: selectedChatId });
       }
@@ -65,20 +74,54 @@ export default function DirectChat() {
 
     socket.on('direct:message', (msg) => {
       if (msg.chatId === selectedChatId) {
-        setMessages((prev) => [...prev, msg]);
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+        if (msg.senderId !== currentUserId) {
+          socket.emit('direct:seen', { chatId: selectedChatId, messageIds: [msg.id] });
+        }
       }
       refetchChats();
+    });
+
+    socket.on('direct:message_updated', (updated) => {
+      setMessages((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
     });
 
     socket.on('direct:message_unsent', ({ messageId, message }) => {
       setMessages((prev) =>
         prev.map((m) =>
           m.id === messageId
-            ? { ...m, isUnsent: true, content: 'This message was unsent' }
+            ? message || { ...m, isUnsent: true, isDeletedForEveryone: true, content: 'This message was unsent' }
             : m
         )
       );
       refetchChats();
+    });
+
+    socket.on('direct:typing', ({ chatId: cId, userId, name, isTyping }) => {
+      if (cId !== selectedChatId || userId === currentUserId) return;
+      setTypingPartner(isTyping ? { userId, name } : null);
+    });
+
+    socket.on('direct:messages_seen', ({ chatId: cId, messageIds }) => {
+      if (cId !== selectedChatId || !Array.isArray(messageIds)) return;
+      setMessages((prev) =>
+        prev.map((m) =>
+          messageIds.includes(m.id) ? { ...m, deliveryStatus: 'SEEN' } : m
+        )
+      );
+    });
+
+    socket.on('presence:update', ({ userId, online, lastSeenAt }) => {
+      if (selectedChat?.partner?.id === userId) {
+        setPartnerPresence((prev) =>
+          prev && !prev.showOnlineStatus
+            ? prev
+            : { showOnlineStatus: true, online, lastSeenAt }
+        );
+      }
     });
 
     socket.on('direct:notification', () => {
@@ -88,12 +131,13 @@ export default function DirectChat() {
     return () => {
       socket.disconnect();
     };
-  }, [selectedChatId, refetchChats]);
+  }, [selectedChatId, currentUserId, selectedChat?.partner?.id, refetchChats]);
 
-  // Fetch messages when selected chat changes
   useEffect(() => {
     if (!selectedChatId) {
       setMessages([]);
+      setPartnerPresence(null);
+      setTypingPartner(null);
       return;
     }
 
@@ -104,60 +148,151 @@ export default function DirectChat() {
     api
       .get(`/direct-chats/${selectedChatId}/messages`)
       .then((r) => {
-        setMessages(r.data.data.messages || []);
+        const list = r.data.data.messages || [];
+        setMessages(list);
+        setPartnerPresence(r.data.data.partnerPresence || null);
+        if (list.length > 0) {
+          api.post(`/direct-chats/${selectedChatId}/read`, {}).then(() => refetchChats()).catch(() => {});
+        }
       })
       .catch((err) => {
         showToast(err.response?.data?.message || 'Could not load messages', 'error');
       });
-  }, [selectedChatId, showToast]);
+  }, [selectedChatId, showToast, refetchChats]);
 
-  // Scroll to bottom on new messages
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages?.length]);
+  }, [messages.length]);
 
-  // Send message
-  const handleSendMessage = () => {
-    if (!input.trim() || !selectedChatId) return;
-    const content = input.trim();
-    setInput('');
-
-    if (socketRef.current && socketRef.current.connected) {
-      socketRef.current.emit('direct:message', { chatId: selectedChatId, content });
-    } else {
-      // HTTP fallback
-      api.post(`/direct-chats/${selectedChatId}/messages`, { content }).then((r) => {
-        setMessages((prev) => [...prev, r.data.data.message]);
-        refetchChats();
-      });
+  const emitTyping = (typing) => {
+    if (socketRef.current?.connected && selectedChatId) {
+      socketRef.current.emit('direct:typing', { chatId: selectedChatId, isTyping: typing });
     }
   };
 
-  // Unsend message
-  const handleUnsendMessage = (messageId) => {
-    if (!window.confirm('Unsend this message for everyone?')) return;
+  const handleInputChange = (val) => {
+    setInput(val);
+    emitTyping(Boolean(val.trim()));
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => emitTyping(false), 1800);
+  };
+
+  const handleSendMessage = () => {
+    const trimmed = input.trim();
+    if ((!trimmed && !pendingAttachment) || !selectedChatId) return;
+
+    const payload = {
+      chatId: selectedChatId,
+      content: trimmed || pendingAttachment?.defaultContent || '',
+      messageType: pendingAttachment?.messageType || 'TEXT',
+      attachment: pendingAttachment?.attachment || null,
+      replyToId: replyingTo?.id || null,
+    };
+
+    setInput('');
+    setReplyingTo(null);
+    setPendingAttachment(null);
+    emitTyping(false);
 
     if (socketRef.current && socketRef.current.connected) {
-      socketRef.current.emit('direct:unsend', { chatId: selectedChatId, messageId }, (res) => {
-        if (!res?.success) {
-          showToast(res?.message || 'Failed to unsend message', 'error');
+      socketRef.current.emit('direct:message', payload, (res) => {
+        if (!res?.success && res?.message) {
+          showToast(res.message, 'error');
         }
       });
     } else {
-      api.delete(`/direct-chats/messages/${messageId}`).then(() => {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === messageId
-              ? { ...m, isUnsent: true, content: 'This message was unsent' }
-              : m
-          )
-        );
+      api.post(`/direct-chats/${selectedChatId}/messages`, payload).then((r) => {
+        setMessages((prev) => [...prev, r.data.data.message]);
+        refetchChats();
+      }).catch((err) => {
+        showToast(err.response?.data?.message || 'Failed to send message', 'error');
+      });
+    }
+  };
+
+  const handleEditMessage = async (messageId, content) => {
+    try {
+      const res = await api.patch(`/direct-chats/${selectedChatId}/messages/${messageId}`, { content });
+      const updated = res.data.data.message;
+      setMessages((prev) => prev.map((m) => (m.id === messageId ? updated : m)));
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to edit message', 'error');
+    }
+  };
+
+  const handleDeleteForMe = async (messageId) => {
+    const snapshot = messages;
+    setMessages((prev) => prev.filter((m) => m.id !== messageId));
+    try {
+      await api.delete(`/direct-chats/${selectedChatId}/messages/${messageId}/for-me`);
+    } catch (err) {
+      setMessages(snapshot);
+      showToast(err.response?.data?.message || 'Could not remove message', 'error');
+    }
+  };
+
+  const handleDeleteForEveryone = (messageId) => {
+    if (!window.confirm('Delete this message for everyone?')) return;
+    if (socketRef.current && socketRef.current.connected) {
+      socketRef.current.emit('direct:unsend', { chatId: selectedChatId, messageId }, (res) => {
+        if (!res?.success) showToast(res?.message || 'Failed to delete message', 'error');
+      });
+    } else {
+      api.delete(`/direct-chats/messages/${messageId}`).then((r) => {
+        const updated = r.data.data.message;
+        setMessages((prev) => prev.map((m) => (m.id === messageId ? updated : m)));
         refetchChats();
       });
     }
   };
 
-  // Start chat with user mutation
+  const handleReactMessage = async (messageId, emoji) => {
+    try {
+      const res = await api.post(`/direct-chats/${selectedChatId}/messages/${messageId}/reactions`, { emoji });
+      const updated = res.data.data.message;
+      setMessages((prev) => prev.map((m) => (m.id === messageId ? updated : m)));
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to update reaction', 'error');
+    }
+  };
+
+  const handlePinMessage = async (messageId) => {
+    try {
+      const res = await api.patch(`/direct-chats/${selectedChatId}/messages/${messageId}/pin`);
+      const updated = res.data.data.message;
+      setMessages((prev) => prev.map((m) => (m.id === messageId ? updated : m)));
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to pin message', 'error');
+    }
+  };
+
+  const handleClearChat = async () => {
+    if (!selectedChatId) return;
+    if (!window.confirm('Clear all messages from your view?')) return;
+    try {
+      await api.post(`/direct-chats/${selectedChatId}/clear`, { action: 'CLEAR' });
+      setMessages([]);
+      refetchChats();
+      showToast('Chat cleared from your view', 'success');
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Could not clear chat', 'error');
+    }
+  };
+
+  const handleDeleteConversation = async () => {
+    if (!selectedChatId) return;
+    if (!window.confirm('Delete this conversation from your inbox? It will reappear if they message you again.')) return;
+    try {
+      await api.delete(`/direct-chats/${selectedChatId}`);
+      setSelectedChatId(null);
+      setMessages([]);
+      refetchChats();
+      showToast('Conversation removed from your list', 'success');
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Could not delete conversation', 'error');
+    }
+  };
+
   const startChatMutation = useMutation({
     mutationFn: (targetUserId) =>
       api.post('/direct-chats/request', { recipientId: targetUserId }).then((r) => r.data.data.chat),
@@ -172,7 +307,6 @@ export default function DirectChat() {
     },
   });
 
-  // Accept / Reject chat request mutation
   const updateStatusMutation = useMutation({
     mutationFn: ({ chatId, status }) =>
       api.put(`/direct-chats/${chatId}/status`, { status }).then((r) => r.data.data.chat),
@@ -182,24 +316,33 @@ export default function DirectChat() {
     },
   });
 
+  const visibleMessages = msgSearch.trim()
+    ? messages.filter(
+        (m) =>
+          !m.isUnsent &&
+          !m.isDeletedForEveryone &&
+          ((m.content || '').toLowerCase().includes(msgSearch.trim().toLowerCase()) ||
+            (m.attachment?.title || '').toLowerCase().includes(msgSearch.trim().toLowerCase()))
+      )
+    : messages;
+
   return (
     <div className="max-w-6xl mx-auto h-[calc(100vh-8.5rem)] flex flex-col space-y-4">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-white flex items-center gap-2" style={{ fontFamily: 'Poppins' }}>
-            <MessageSquare size={22} className="text-blue-400" />
-            1-on-1 Student Chat
+            <MessageSquare size={22} className="text-indigo-400" />
+            Direct Messaging
           </h1>
           <p className="text-xs text-slate-400">
-            Connect directly with peer matric/intermediate students across Pakistan
+            Real-time conversations with classmates and teachers — with replies, reactions, and study sharing
           </p>
         </div>
       </div>
 
       <div className="flex-1 grid grid-cols-1 md:grid-cols-12 gap-4 overflow-hidden">
-        {/* Left Sidebar: Chats list and User Search (4 cols) */}
+        {/* Left Sidebar */}
         <div className="md:col-span-4 bg-slate-900/60 border border-slate-800 rounded-2xl flex flex-col overflow-hidden backdrop-blur-md">
-          {/* Search bar */}
           <div className="p-3 border-b border-slate-800">
             <div className="relative">
               <Search size={15} className="absolute left-3 top-3 text-slate-400" />
@@ -207,22 +350,21 @@ export default function DirectChat() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search students by name or email…"
-                className="w-full bg-slate-950/60 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-blue-500"
+                placeholder="Search students or teachers…"
+                className="w-full bg-slate-950/60 border border-slate-800 rounded-xl pl-9 pr-3 py-2 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
               />
             </div>
           </div>
 
-          {/* Search Results Dropdown/List */}
           {searchQuery.trim().length >= 2 ? (
             <div className="flex-1 overflow-y-auto p-2 space-y-1.5 scrollbar-thin">
               <p className="text-[11px] font-semibold text-slate-400 px-2 py-1 uppercase tracking-wider">
-                Matching Students
+                Matching Users
               </p>
               {searching ? (
                 <div className="p-4 text-center text-xs text-slate-500">Searching…</div>
               ) : searchResults.length === 0 ? (
-                <div className="p-4 text-center text-xs text-slate-500">No students found</div>
+                <div className="p-4 text-center text-xs text-slate-500">No users found</div>
               ) : (
                 searchResults.map((target) => (
                   <div
@@ -232,8 +374,8 @@ export default function DirectChat() {
                     <div className="min-w-0">
                       <p className="text-xs font-semibold text-white truncate">{target.name}</p>
                       <p className="text-[11px] text-slate-400 truncate">{target.email}</p>
-                      <span className="text-[10px] text-blue-400">
-                        {target.grade ? `Class ${target.grade}` : 'Student'} • {target.points || 0} XP
+                      <span className="text-[10px] text-indigo-400">
+                        {target.grade ? `Class ${target.grade}` : 'Member'} • {target.points || 0} XP
                       </span>
                     </div>
 
@@ -241,7 +383,7 @@ export default function DirectChat() {
                       type="button"
                       disabled={startChatMutation.isPending}
                       onClick={() => startChatMutation.mutate(target.id)}
-                      className="px-2.5 py-1 rounded-lg bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium shrink-0 flex items-center gap-1 cursor-pointer transition-colors"
+                      className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium shrink-0 flex items-center gap-1 cursor-pointer transition-colors"
                     >
                       <UserPlus size={13} />
                       <span>{target.chat ? 'Chat' : 'Connect'}</span>
@@ -251,7 +393,6 @@ export default function DirectChat() {
               )}
             </div>
           ) : (
-            /* Chat list */
             <div className="flex-1 overflow-y-auto p-2 space-y-1 scrollbar-thin">
               {loadingChats ? (
                 <Skeleton className="h-64 rounded-xl" />
@@ -259,13 +400,14 @@ export default function DirectChat() {
                 <div className="p-6 text-center text-slate-500 space-y-2">
                   <MessageSquare size={32} className="mx-auto text-slate-600" />
                   <p className="text-xs font-medium">No active chats yet</p>
-                  <p className="text-[11px]">Search for a classmate above to start a conversation!</p>
+                  <p className="text-[11px]">Search for a classmate or teacher above to start!</p>
                 </div>
               ) : (
                 chats.map((c) => {
                   const isSelected = c.id === selectedChatId;
                   const isPending = c.status === 'PENDING';
                   const needsAction = isPending && !c.isInitiator;
+                  const isOnline = Boolean(c.partner?.presence?.online);
 
                   return (
                     <div
@@ -273,14 +415,19 @@ export default function DirectChat() {
                       onClick={() => setSelectedChatId(c.id)}
                       className={`p-3 rounded-xl border transition-all cursor-pointer ${
                         isSelected
-                          ? 'border-blue-500/50 bg-blue-500/10 text-white shadow-sm'
+                          ? 'border-indigo-500/50 bg-indigo-500/10 text-white shadow-sm'
                           : 'border-slate-800/60 bg-slate-900/30 text-slate-300 hover:border-slate-700 hover:bg-slate-800/40'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-xs text-blue-400 shrink-0">
-                            {c.partner?.name?.charAt(0)?.toUpperCase() || 'U'}
+                          <div className="relative shrink-0">
+                            <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-xs text-indigo-400">
+                              {c.partner?.name?.charAt(0)?.toUpperCase() || 'U'}
+                            </div>
+                            {isOnline && (
+                              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-slate-900" />
+                            )}
                           </div>
                           <div className="min-w-0">
                             <p className="text-xs font-semibold text-slate-100 truncate">{c.partner?.name}</p>
@@ -296,14 +443,20 @@ export default function DirectChat() {
                           </div>
                         </div>
 
-                        {isPending && (
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 shrink-0">
-                            Pending
-                          </span>
-                        )}
+                        <div className="flex flex-col items-end gap-1 shrink-0">
+                          {c.unreadCount > 0 && (
+                            <span className="px-1.5 py-0.5 rounded-full bg-indigo-600 text-white text-[10px] font-bold">
+                              {c.unreadCount}
+                            </span>
+                          )}
+                          {isPending && (
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                              Pending
+                            </span>
+                          )}
+                        </div>
                       </div>
 
-                      {/* Action buttons if current user needs to accept request */}
                       {needsAction && (
                         <div className="flex items-center justify-end gap-2 mt-2 pt-2 border-t border-slate-800/60">
                           <button
@@ -312,7 +465,7 @@ export default function DirectChat() {
                               e.stopPropagation();
                               updateStatusMutation.mutate({ chatId: c.id, status: 'REJECTED' });
                             }}
-                            className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 text-[11px] font-medium"
+                            className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-400 text-[11px] font-medium cursor-pointer"
                           >
                             Decline
                           </button>
@@ -322,7 +475,7 @@ export default function DirectChat() {
                               e.stopPropagation();
                               updateStatusMutation.mutate({ chatId: c.id, status: 'ACCEPTED' });
                             }}
-                            className="px-2.5 py-1 rounded bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-medium flex items-center gap-1"
+                            className="px-2.5 py-1 rounded bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-medium flex items-center gap-1 cursor-pointer"
                           >
                             <Check size={12} />
                             Accept
@@ -337,97 +490,136 @@ export default function DirectChat() {
           )}
         </div>
 
-        {/* Right Area: Messages View (8 cols) */}
+        {/* Right Conversation Panel */}
         <div className="md:col-span-8 bg-slate-900/60 border border-slate-800 rounded-2xl flex flex-col overflow-hidden backdrop-blur-md">
           {selectedChat ? (
             <>
-              {/* Chat Header */}
-              <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/40">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-blue-500/20 border border-blue-500/40 flex items-center justify-center font-bold text-sm text-blue-400">
+              <div className="p-3.5 border-b border-slate-800 flex items-center justify-between bg-slate-950/40 gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-full bg-indigo-500/20 border border-indigo-500/40 flex items-center justify-center font-bold text-sm text-indigo-400 shrink-0">
                     {selectedChat.partner?.name?.charAt(0)?.toUpperCase() || 'U'}
                   </div>
-                  <div>
-                    <h2 className="text-sm font-bold text-white leading-tight">{selectedChat.partner?.name}</h2>
-                    <p className="text-[11px] text-slate-400">
-                      {selectedChat.partner?.email} • {selectedChat.partner?.grade ? `Class ${selectedChat.partner.grade}` : 'Student'}
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-bold text-white leading-tight truncate">{selectedChat.partner?.name}</h2>
+                    <p className="text-[11px] text-slate-400 truncate flex items-center gap-1.5">
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          partnerPresence?.online ? 'bg-emerald-400' : 'bg-slate-500'
+                        }`}
+                      />
+                      <span>{formatLastSeen(partnerPresence || selectedChat.partner?.presence)}</span>
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 text-xs">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                  <span className="text-slate-400 text-[11px]">Real-time encrypted</span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setMsgSearchOpen((v) => !v)}
+                    className="p-2 rounded-lg border border-slate-800 text-slate-400 hover:text-white cursor-pointer"
+                    title="Search messages"
+                  >
+                    <Search size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleClearChat}
+                    className="p-2 rounded-lg border border-slate-800 text-slate-400 hover:text-amber-400 cursor-pointer"
+                    title="Clear messages for me"
+                  >
+                    <Eraser size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteConversation}
+                    className="p-2 rounded-lg border border-slate-800 text-slate-400 hover:text-rose-400 cursor-pointer"
+                    title="Delete conversation from my inbox"
+                  >
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               </div>
 
-              {/* Chat Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3 scrollbar-thin">
-                {messages.length === 0 ? (
-                  <div className="text-center py-12 text-slate-500 space-y-1">
-                    <p className="text-xs font-semibold text-slate-400">Say hello!</p>
-                    <p className="text-[11px]">Ask questions about Class 9 Physics or share study tips.</p>
-                  </div>
-                ) : (
-                  messages.map((m) => {
-                    const currentUserId = user?.id || user?._id;
-                    const isMine = Boolean(currentUserId && (m.senderId === currentUserId || m.sender?.id === currentUserId));
+              {msgSearchOpen && (
+                <div className="px-4 py-2 border-b border-slate-800 bg-slate-950/30 flex items-center gap-2">
+                  <Search size={13} className="text-slate-400" />
+                  <input
+                    type="text"
+                    value={msgSearch}
+                    onChange={(e) => setMsgSearch(e.target.value)}
+                    placeholder="Search within this conversation…"
+                    className="flex-1 bg-transparent text-xs text-slate-100 focus:outline-none"
+                    autoFocus
+                  />
+                  {msgSearch && (
+                    <button type="button" onClick={() => setMsgSearch('')} className="text-slate-400 hover:text-white cursor-pointer">
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
+              )}
 
-                    return (
-                      <div
-                        key={m.id}
-                        className={`flex items-end gap-2 group ${isMine ? 'justify-end' : 'justify-start'}`}
-                      >
-                        {/* Unsend button (visible on hover or tap for sender) */}
-                        {isMine && !m.isUnsent && (
-                          <button
-                            type="button"
-                            onClick={() => handleUnsendMessage(m.id)}
-                            className="opacity-40 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800/80 cursor-pointer"
-                            title="Unsend for everyone"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        )}
+              {visibleMessages.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-500 space-y-1">
+                  <p className="text-xs font-semibold text-slate-400">
+                    {msgSearch ? 'No matching messages' : 'Say hello!'}
+                  </p>
+                  <p className="text-[11px]">
+                    {msgSearch
+                      ? 'Try a different keyword.'
+                      : 'Ask questions, reply inline, or share quizzes and study notes.'}
+                  </p>
+                </div>
+              ) : (
+                <ChatMessageList
+                  messages={visibleMessages}
+                  currentUserId={currentUserId}
+                  currentUserRole={user?.role}
+                  canPin
+                  canModerate={false}
+                  showSenderNames={false}
+                  typingUsers={typingPartner ? [typingPartner] : []}
+                  onReply={(m) => setReplyingTo(m)}
+                  onCopy={(text) => {
+                    navigator.clipboard?.writeText(text);
+                    showToast('Copied to clipboard', 'success');
+                  }}
+                  onEdit={handleEditMessage}
+                  onDeleteForMe={handleDeleteForMe}
+                  onDeleteForEveryone={handleDeleteForEveryone}
+                  onReact={handleReactMessage}
+                  onPin={handlePinMessage}
+                  bottomRef={bottomRef}
+                />
+              )}
 
-                        <div
-                          className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-xs sm:text-sm shadow-md transition-all ${
-                            isMine
-                              ? m.isUnsent
-                                ? 'bg-slate-800/60 border border-slate-700/60 text-slate-400 italic rounded-br-none'
-                                : 'bg-blue-600 text-white rounded-br-none'
-                              : m.isUnsent
-                              ? 'bg-slate-800/40 border border-slate-800 text-slate-500 italic rounded-bl-none'
-                              : 'bg-slate-800 border border-slate-700/60 text-slate-200 rounded-bl-none'
-                          }`}
-                        >
-                          <p className="leading-relaxed">{m.content}</p>
-                          <div
-                            className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${
-                              isMine ? 'text-blue-200/80' : 'text-slate-500'
-                            }`}
-                          >
-                            <span>
-                              {m.createdAt
-                                ? new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                                : ''}
-                            </span>
-                            {m.isUnsent && <span className="ml-1 text-slate-400">• Unsent</span>}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-                <div ref={bottomRef} />
-              </div>
+              <ReplyComposerBanner replyingTo={replyingTo} onCancel={() => setReplyingTo(null)} />
 
-              {/* Input Area */}
+              {pendingAttachment && (
+                <div className="px-4 py-2 border-t border-slate-800 bg-indigo-500/10 flex items-center justify-between text-xs">
+                  <span className="text-indigo-300 font-medium truncate">
+                    Attached: {pendingAttachment.attachment?.title || pendingAttachment.messageType}
+                  </span>
+                  <button type="button" onClick={() => setPendingAttachment(null)} className="text-slate-400 hover:text-white cursor-pointer">
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
+
               <div className="p-3 border-t border-slate-800 bg-slate-950/40 flex items-center gap-2">
+                <button
+                  type="button"
+                  disabled={selectedChat.status === 'PENDING'}
+                  onClick={() => setShareOpen(true)}
+                  className="p-2.5 rounded-xl border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 disabled:opacity-40 cursor-pointer"
+                  title="Share Quiz, Material, or Study Note"
+                >
+                  <Paperclip size={16} />
+                </button>
                 <input
                   type="text"
                   value={input}
-                  onChange={(e) => setInput(e.target.value)}
+                  onChange={(e) => handleInputChange(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
                   placeholder={
                     selectedChat.status === 'PENDING'
@@ -435,13 +627,13 @@ export default function DirectChat() {
                       : 'Type a message… (Press Enter to send)'
                   }
                   disabled={selectedChat.status === 'PENDING'}
-                  className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-blue-500 disabled:opacity-50"
+                  className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500 disabled:opacity-50"
                 />
                 <button
                   type="button"
                   onClick={handleSendMessage}
-                  disabled={!input.trim() || selectedChat.status === 'PENDING'}
-                  className="p-2.5 rounded-xl bg-blue-500 hover:bg-blue-600 disabled:opacity-40 text-white cursor-pointer transition-all shadow-md shadow-blue-500/20"
+                  disabled={(!input.trim() && !pendingAttachment) || selectedChat.status === 'PENDING'}
+                  className="p-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 text-white cursor-pointer transition-all shadow-md"
                 >
                   <Send size={16} />
                 </button>
@@ -449,20 +641,25 @@ export default function DirectChat() {
             </>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-500 space-y-3">
-              <div className="w-14 h-14 rounded-2xl bg-slate-800/60 border border-slate-700 flex items-center justify-center text-blue-400">
+              <div className="w-14 h-14 rounded-2xl bg-slate-800/60 border border-slate-700 flex items-center justify-center text-indigo-400">
                 <MessageSquare size={26} />
               </div>
               <h3 className="text-base font-bold text-slate-300" style={{ fontFamily: 'Poppins' }}>
                 Select a Chat or Find Classmates
               </h3>
               <p className="text-xs max-w-sm text-slate-400 leading-relaxed">
-                Study with friends, compare test scores, clarify Physics doubts, and message in real-time.
+                Collaborate with peers and educators in real time — reply inline, react, pin key explanations, and share quizzes or notes.
               </p>
             </div>
           )}
         </div>
       </div>
+
+      <ShareStudyModal
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        onSelect={(item) => setPendingAttachment(item)}
+      />
     </div>
   );
 }
-

@@ -17,6 +17,19 @@ export const requireAuth = async (req, res, next) => {
   }
 };
 
+export const isApprovedTeacher = (user) => {
+  if (!user) return false;
+  if (user.role === 'ADMIN') return true;
+  return user.role === 'TEACHER' && user.teacherStatus !== 'PENDING' && user.teacherStatus !== 'REJECTED';
+};
+
+export const requireTeacher = (req, res, next) => {
+  if (!isApprovedTeacher(req.user)) {
+    return next(new ApiError(403, 'Educator access required'));
+  }
+  next();
+};
+
 export const requireAdmin = (req, res, next) => {
   if (req.user?.role !== 'ADMIN') return next(new ApiError(403, 'Forbidden'));
   next();

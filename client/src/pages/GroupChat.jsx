@@ -2,219 +2,378 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { io } from 'socket.io-client';
-import { Send, Trash2, ArrowLeft, Users } from 'lucide-react';
+import {
+  Send,
+  ArrowLeft,
+  Search,
+  Paperclip,
+  Eraser,
+  X,
+} from 'lucide-react';
 import { api, getAccessToken, SOCKET_URL } from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.jsx';
 import { useToast } from '../context/ToastContext.jsx';
 import Skeleton from '../components/Skeleton.jsx';
+import ChatMessageList, { ReplyComposerBanner } from '../components/ChatMessageList.jsx';
+import ShareStudyModal from '../components/ShareStudyModal.jsx';
 
 export default function GroupChat() {
   const { id } = useParams();
   const { user } = useAuth();
   const { showToast } = useToast();
-  const [messages, setMessages] = useState(null);
+  const currentUserId = user?.id || user?._id;
+
+  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [connected, setConnected] = useState(false);
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [pendingAttachment, setPendingAttachment] = useState(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [typingUsers, setTypingUsers] = useState([]);
+
   const socketRef = useRef(null);
   const bottomRef = useRef(null);
+  const typingTimeoutRef = useRef(null);
 
   const { data: group } = useQuery({
     queryKey: ['group', id],
     queryFn: () => api.get(`/groups/${id}`).then((r) => r.data.data.group),
   });
 
-  const { data: history, isLoading } = useQuery({
+  const { isLoading } = useQuery({
     queryKey: ['group-messages', id],
-    queryFn: () => api.get(`/groups/${id}/messages`).then((r) => r.data.data.messages),
+    queryFn: async () => {
+      const res = await api.get(`/groups/${id}/messages`);
+      const list = res.data.data.messages || [];
+      setMessages(list);
+      if (list.length > 0) {
+        api.post(`/groups/${id}/read`, {}).catch(() => {});
+      }
+      return list;
+    },
   });
-
-  useEffect(() => {
-    if (history) setMessages(history);
-  }, [history]);
 
   useEffect(() => {
     const socket = io(SOCKET_URL, { auth: { token: getAccessToken() } });
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      socket.emit('group:join', { groupId: id }, (res) => setConnected(res?.success));
+      socket.emit('group:join', { groupId: id }, (res) => setConnected(Boolean(res?.success)));
     });
 
     socket.on('group:message', (msg) => {
-      setMessages((prev) => (prev ? [...prev, msg] : [msg]));
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
+      if (msg.senderId !== currentUserId) {
+        socket.emit('group:seen', { groupId: id, messageIds: [msg.id] });
+      }
+    });
+
+    socket.on('group:message_updated', (updated) => {
+      setMessages((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
     });
 
     socket.on('group:message_unsent', ({ messageId, message }) => {
       setMessages((prev) =>
-        prev
-          ? prev.map((m) =>
-              m.id === messageId
-                ? { ...m, isUnsent: true, content: 'This message was unsent' }
-                : m
-            )
-          : prev
+        prev.map((m) =>
+          m.id === messageId
+            ? message || { ...m, isUnsent: true, isDeletedForEveryone: true, content: 'This message was unsent' }
+            : m
+        )
       );
     });
 
-    return () => socket.disconnect();
-  }, [id]);
+    socket.on('group:typing', ({ groupId: gId, userId, name, isTyping }) => {
+      if (gId !== id || userId === currentUserId) return;
+      setTypingUsers((prev) => {
+        const filtered = prev.filter((u) => u.userId !== userId);
+        return isTyping ? [...filtered, { userId, name }] : filtered;
+      });
+    });
+
+    socket.on('group:messages_seen', ({ groupId: gId, messageIds }) => {
+      if (gId !== id || !Array.isArray(messageIds)) return;
+      setMessages((prev) =>
+        prev.map((m) =>
+          messageIds.includes(m.id) ? { ...m, deliveryStatus: 'SEEN' } : m
+        )
+      );
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [id, currentUserId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages?.length]);
+  }, [messages.length]);
 
-  const send = () => {
-    if (!input.trim()) return;
-    const content = input.trim();
-    setInput('');
-
-    if (socketRef.current && socketRef.current.connected) {
-      socketRef.current.emit('group:message', { groupId: id, content });
-    } else {
-      api.post(`/groups/${id}/messages`, { content }).then((r) => {
-        setMessages((prev) => [...prev, r.data.data.message]);
-      });
+  const emitTyping = (typing) => {
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('group:typing', { groupId: id, isTyping: typing });
     }
   };
 
-  const handleUnsend = (messageId) => {
-    if (!window.confirm('Unsend this message for everyone in the group?')) return;
+  const handleInputChange = (val) => {
+    setInput(val);
+    emitTyping(Boolean(val.trim()));
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => emitTyping(false), 1800);
+  };
+
+  const send = () => {
+    const trimmed = input.trim();
+    if (!trimmed && !pendingAttachment) return;
+    const payload = {
+      groupId: id,
+      content: trimmed || pendingAttachment?.defaultContent || '',
+      messageType: pendingAttachment?.messageType || 'TEXT',
+      attachment: pendingAttachment?.attachment || null,
+      replyToId: replyingTo?.id || null,
+    };
+
+    setInput('');
+    setReplyingTo(null);
+    setPendingAttachment(null);
+    emitTyping(false);
 
     if (socketRef.current && socketRef.current.connected) {
-      socketRef.current.emit('group:unsend', { groupId: id, messageId }, (res) => {
-        if (!res?.success) {
-          showToast(res?.message || 'Failed to unsend message', 'error');
+      socketRef.current.emit('group:message', payload, (res) => {
+        if (!res?.success && res?.message) {
+          showToast(res.message, 'error');
         }
       });
     } else {
-      api.delete(`/groups/${id}/messages/${messageId}`).then(() => {
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === messageId
-              ? { ...m, isUnsent: true, content: 'This message was unsent' }
-              : m
-          )
-        );
+      api.post(`/groups/${id}/messages`, payload).then((r) => {
+        setMessages((prev) => [...prev, r.data.data.message]);
+      }).catch((err) => {
+        showToast(err.response?.data?.message || 'Failed to send message', 'error');
       });
     }
   };
 
-  if (isLoading || messages === null) return <Skeleton className="h-96" />;
+  const handleEdit = async (messageId, content) => {
+    try {
+      const res = await api.patch(`/groups/${id}/messages/${messageId}`, { content });
+      const updated = res.data.data.message;
+      setMessages((prev) => prev.map((m) => (m.id === messageId ? updated : m)));
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to edit message', 'error');
+    }
+  };
 
-  const isOwnerOrAdmin = group?.ownerId === user?.id || user?.role === 'ADMIN';
+  const handleDeleteForMe = async (messageId) => {
+    const snapshot = messages;
+    setMessages((prev) => prev.filter((m) => m.id !== messageId));
+    try {
+      await api.delete(`/groups/${id}/messages/${messageId}/for-me`);
+    } catch (err) {
+      setMessages(snapshot);
+      showToast(err.response?.data?.message || 'Could not remove message', 'error');
+    }
+  };
+
+  const handleDeleteForEveryone = (messageId) => {
+    if (!window.confirm('Delete this message for everyone in the group?')) return;
+    if (socketRef.current && socketRef.current.connected) {
+      socketRef.current.emit('group:unsend', { groupId: id, messageId }, (res) => {
+        if (!res?.success) showToast(res?.message || 'Failed to delete message', 'error');
+      });
+    } else {
+      api.delete(`/groups/${id}/messages/${messageId}`).then((r) => {
+        const updated = r.data.data.message;
+        setMessages((prev) => prev.map((m) => (m.id === messageId ? updated : m)));
+      });
+    }
+  };
+
+  const handleReact = async (messageId, emoji) => {
+    try {
+      const res = await api.post(`/groups/${id}/messages/${messageId}/reactions`, { emoji });
+      const updated = res.data.data.message;
+      setMessages((prev) => prev.map((m) => (m.id === messageId ? updated : m)));
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Could not react to message', 'error');
+    }
+  };
+
+  const handlePin = async (messageId) => {
+    try {
+      const res = await api.patch(`/groups/${id}/messages/${messageId}/pin`);
+      const updated = res.data.data.message;
+      setMessages((prev) => prev.map((m) => (m.id === messageId ? updated : m)));
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Could not pin message', 'error');
+    }
+  };
+
+  const handleClearChat = async () => {
+    if (!window.confirm('Clear chat history from your view? Other members will still see messages.')) return;
+    try {
+      await api.post(`/groups/${id}/clear`, { action: 'CLEAR' });
+      setMessages([]);
+      showToast('Chat cleared from your view', 'success');
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to clear chat', 'error');
+    }
+  };
+
+  if (isLoading) return <Skeleton className="h-96" />;
+
+  const myMember = group?.members?.find((m) => m.userId === currentUserId);
+  const canModerate =
+    group?.ownerId === currentUserId ||
+    user?.role === 'ADMIN' ||
+    myMember?.role === 'OWNER' ||
+    myMember?.role === 'MODERATOR';
+
+  const visibleMessages = searchTerm.trim()
+    ? messages.filter(
+        (m) =>
+          !m.isUnsent &&
+          !m.isDeletedForEveryone &&
+          ((m.content || '').toLowerCase().includes(searchTerm.trim().toLowerCase()) ||
+            (m.attachment?.title || '').toLowerCase().includes(searchTerm.trim().toLowerCase()))
+      )
+    : messages;
 
   return (
-    <div className="max-w-3xl mx-auto flex flex-col h-[calc(100vh-8rem)] space-y-3">
-      <div className="flex items-center justify-between">
-        <Link
-          to={`/groups/${id}`}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-slate-200 transition-colors"
-        >
-          <ArrowLeft size={14} /> Back to Group
-        </Link>
+    <div className="max-w-4xl mx-auto flex flex-col h-[calc(100vh-8rem)] space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Link
+            to={`/groups/${id}`}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-slate-200 transition-colors"
+          >
+            <ArrowLeft size={14} /> Back
+          </Link>
+          <div>
+            <h1 className="text-sm font-bold text-white leading-tight">{group?.name || 'Group Chat'}</h1>
+            <p className="text-[11px] text-slate-400">{group?.members?.length || 0} participants</p>
+          </div>
+        </div>
+
         <div className="flex items-center gap-2">
-          <span className={`w-2 h-2 rounded-full ${connected ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`} />
-          <span className="text-xs text-slate-400">{connected ? 'Live Chat' : 'Connecting…'}</span>
+          <button
+            type="button"
+            onClick={() => setSearchOpen((v) => !v)}
+            className="p-2 rounded-xl border border-slate-800 text-slate-400 hover:text-white cursor-pointer"
+            title="Search messages"
+          >
+            <Search size={14} />
+          </button>
+          <button
+            type="button"
+            onClick={handleClearChat}
+            className="p-2 rounded-xl border border-slate-800 text-slate-400 hover:text-amber-400 cursor-pointer"
+            title="Clear chat for me"
+          >
+            <Eraser size={14} />
+          </button>
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-900 border border-slate-800">
+            <span className={`w-2 h-2 rounded-full ${connected ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`} />
+            <span className="text-[11px] text-slate-400">{connected ? 'Live' : 'Connecting…'}</span>
+          </div>
         </div>
       </div>
 
-      <div className="flex-1 border border-slate-800 rounded-2xl bg-slate-900/60 backdrop-blur-md flex flex-col overflow-hidden shadow-xl">
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5 scrollbar-thin">
-          {messages.length === 0 && (
-            <p className="text-sm text-slate-500 text-center mt-12">No messages yet — start the study conversation.</p>
+      {searchOpen && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-800 bg-slate-900/60">
+          <Search size={14} className="text-slate-400" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search messages in this group…"
+            className="flex-1 bg-transparent text-xs text-slate-100 focus:outline-none"
+            autoFocus
+          />
+          {searchTerm && (
+            <button type="button" onClick={() => setSearchTerm('')} className="text-slate-400 hover:text-white cursor-pointer">
+              <X size={14} />
+            </button>
           )}
-
-          {messages.map((m) => {
-            const currentUserId = user?.id || user?._id;
-            const isMine = Boolean(currentUserId && (m.senderId === currentUserId || m.sender?.id === currentUserId));
-            const canUnsend = (isMine || isOwnerOrAdmin) && !m.isUnsent;
-
-            return (
-              <div
-                key={m.id}
-                className={`flex items-end gap-2 group ${isMine ? 'justify-end' : 'justify-start'}`}
-              >
-                {/* Unsend button (visible on hover or tap) */}
-                {isMine && canUnsend && (
-                  <button
-                    type="button"
-                    onClick={() => handleUnsend(m.id)}
-                    className="opacity-40 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800/80 cursor-pointer"
-                    title="Unsend for everyone"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                )}
-
-                <div
-                  className={`max-w-[75%] rounded-2xl px-4 py-2.5 text-xs sm:text-sm shadow-md transition-all ${
-                    isMine
-                      ? m.isUnsent
-                        ? 'bg-slate-800/60 border border-slate-700/60 text-slate-400 italic rounded-br-none'
-                        : 'bg-blue-600 text-white rounded-br-none'
-                      : m.isUnsent
-                      ? 'bg-slate-800/40 border border-slate-800 text-slate-500 italic rounded-bl-none'
-                      : 'bg-slate-800 border border-slate-700/60 text-slate-200 rounded-bl-none'
-                  }`}
-                >
-                  {!isMine && (
-                    <p className="text-[11px] font-semibold text-blue-400 mb-0.5">
-                      {m.sender?.name || 'Classmate'}
-                    </p>
-                  )}
-                  <p className="leading-relaxed">{m.content}</p>
-                  <div
-                    className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${
-                      isMine ? 'text-blue-200/80' : 'text-slate-500'
-                    }`}
-                  >
-                    <span>
-                      {m.createdAt
-                        ? new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                        : ''}
-                    </span>
-                    {m.isUnsent && <span className="ml-1 text-slate-400">• Unsent</span>}
-                  </div>
-                </div>
-
-                {/* Admin moderation unsend button */}
-                {!isMine && isOwnerOrAdmin && canUnsend && (
-                  <button
-                    type="button"
-                    onClick={() => handleUnsend(m.id)}
-                    className="opacity-40 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800/80 cursor-pointer"
-                    title="Moderate: Unsend for everyone"
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                )}
-              </div>
-            );
-          })}
-          <div ref={bottomRef} />
         </div>
+      )}
 
-        {/* Input Bar */}
+      <div className="flex-1 border border-slate-800 rounded-2xl bg-slate-900/60 backdrop-blur-md flex flex-col overflow-hidden shadow-xl">
+        {visibleMessages.length === 0 ? (
+          <div className="flex-1 flex items-center justify-center p-8 text-center text-sm text-slate-500">
+            {searchTerm ? 'No matching messages found.' : 'No messages yet — start the study conversation.'}
+          </div>
+        ) : (
+          <ChatMessageList
+            messages={visibleMessages}
+            currentUserId={currentUserId}
+            currentUserRole={user?.role}
+            canPin={canModerate}
+            canModerate={canModerate}
+            showSenderNames
+            typingUsers={typingUsers}
+            onReply={(m) => setReplyingTo(m)}
+            onCopy={(text) => {
+              navigator.clipboard?.writeText(text);
+              showToast('Copied to clipboard', 'success');
+            }}
+            onEdit={handleEdit}
+            onDeleteForMe={handleDeleteForMe}
+            onDeleteForEveryone={handleDeleteForEveryone}
+            onReact={handleReact}
+            onPin={handlePin}
+            bottomRef={bottomRef}
+          />
+        )}
+
+        <ReplyComposerBanner replyingTo={replyingTo} onCancel={() => setReplyingTo(null)} />
+
+        {pendingAttachment && (
+          <div className="px-4 py-2 border-t border-slate-800 bg-indigo-500/10 flex items-center justify-between text-xs">
+            <span className="text-indigo-300 font-medium truncate">
+              Attached: {pendingAttachment.attachment?.title || pendingAttachment.messageType}
+            </span>
+            <button type="button" onClick={() => setPendingAttachment(null)} className="text-slate-400 hover:text-white cursor-pointer">
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
         <div className="border-t border-slate-800 p-3 bg-slate-950/40 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShareOpen(true)}
+            className="p-2.5 rounded-xl border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 cursor-pointer"
+            title="Share Quiz, Material, or Study Note"
+          >
+            <Paperclip size={16} />
+          </button>
           <input
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => handleInputChange(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && send()}
-            placeholder={connected ? 'Message the group… (Enter to send)' : 'Connecting…'}
-            disabled={!connected}
-            className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-blue-500 disabled:opacity-60"
+            placeholder="Message the group… (Enter to send)"
+            className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-xs sm:text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-indigo-500"
           />
           <button
             type="button"
             onClick={send}
-            disabled={!connected || !input.trim()}
-            className="bg-blue-500 hover:bg-blue-600 disabled:opacity-50 rounded-xl p-2.5 text-white transition-all shadow-md shadow-blue-500/20 cursor-pointer"
+            disabled={!input.trim() && !pendingAttachment}
+            className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 rounded-xl p-2.5 text-white transition-all shadow-md cursor-pointer"
           >
             <Send size={16} />
           </button>
         </div>
       </div>
+
+      <ShareStudyModal
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        onSelect={(item) => setPendingAttachment(item)}
+      />
     </div>
   );
 }

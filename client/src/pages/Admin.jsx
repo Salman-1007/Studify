@@ -16,6 +16,10 @@ import {
   Plus,
   CheckCircle2,
   AlertCircle,
+  GraduationCap,
+  KeyRound,
+  XCircle,
+  Copy,
 } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { useToast } from '../context/ToastContext.jsx';
@@ -26,7 +30,7 @@ export default function Admin() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState('OVERVIEW'); // 'OVERVIEW' | 'USERS' | 'MATERIALS' | 'CHATS' | 'PACKS'
 
-  // Form state for creating question pack
+  const [inviteForm, setInviteForm] = useState({ email: '', maxUses: 1, expiresInDays: 14 });
   const [showPackModal, setShowPackModal] = useState(false);
   const [packForm, setPackForm] = useState({
     title: 'PTB Class 9 Physics - Board Exam Pack',
@@ -66,6 +70,18 @@ export default function Admin() {
     enabled: activeTab === 'PACKS' || activeTab === 'OVERVIEW',
   });
 
+  const { data: teachersData, isLoading: loadingTeachers } = useQuery({
+    queryKey: ['admin-teachers'],
+    queryFn: () => api.get('/admin/teachers').then((r) => r.data.data.teachers),
+    enabled: activeTab === 'TEACHERS' || activeTab === 'OVERVIEW',
+  });
+
+  const { data: invitesData, isLoading: loadingInvites } = useQuery({
+    queryKey: ['admin-teacher-invites'],
+    queryFn: () => api.get('/admin/teacher-invites').then((r) => r.data.data.invites),
+    enabled: activeTab === 'TEACHERS',
+  });
+
   // Mutations
   const deactivateUserMutation = useMutation({
     mutationFn: (userId) => api.patch(`/admin/users/${userId}/deactivate`),
@@ -95,10 +111,52 @@ export default function Admin() {
     },
   });
 
+  const approveTeacherMutation = useMutation({
+    mutationFn: (userId) => api.patch(`/admin/teachers/${userId}/approve`),
+    onSuccess: () => {
+      showToast('Educator account approved', 'success');
+      queryClient.invalidateQueries(['admin-teachers']);
+      queryClient.invalidateQueries(['admin-users']);
+    },
+    onError: (err) => showToast(err.response?.data?.message || 'Approval failed', 'error'),
+  });
+
+  const rejectTeacherMutation = useMutation({
+    mutationFn: (userId) => api.patch(`/admin/teachers/${userId}/reject`),
+    onSuccess: () => {
+      showToast('Educator request rejected', 'success');
+      queryClient.invalidateQueries(['admin-teachers']);
+      queryClient.invalidateQueries(['admin-users']);
+    },
+    onError: (err) => showToast(err.response?.data?.message || 'Rejection failed', 'error'),
+  });
+
+  const createInviteMutation = useMutation({
+    mutationFn: (payload) => api.post('/admin/teacher-invites', payload),
+    onSuccess: () => {
+      showToast('Educator invite code generated', 'success');
+      setInviteForm({ email: '', maxUses: 1, expiresInDays: 14 });
+      queryClient.invalidateQueries(['admin-teacher-invites']);
+    },
+    onError: (err) => showToast(err.response?.data?.message || 'Failed to create invite code', 'error'),
+  });
+
+  const revokeInviteMutation = useMutation({
+    mutationFn: (id) => api.patch(`/admin/teacher-invites/${id}/revoke`),
+    onSuccess: () => {
+      showToast('Invite code revoked', 'success');
+      queryClient.invalidateQueries(['admin-teacher-invites']);
+    },
+    onError: (err) => showToast(err.response?.data?.message || 'Failed to revoke invite code', 'error'),
+  });
+
   if (loadingStats) return <Skeleton className="h-96 rounded-2xl max-w-5xl mx-auto" />;
+
+  const pendingTeacherCount = (teachersData || []).filter((t) => t.teacherStatus === 'PENDING').length;
 
   const tabs = [
     { key: 'OVERVIEW', label: 'Overview', icon: Layers },
+    { key: 'TEACHERS', label: pendingTeacherCount > 0 ? `Educators (${pendingTeacherCount})` : 'Educators', icon: GraduationCap },
     { key: 'USERS', label: 'Users', icon: Users },
     { key: 'MATERIALS', label: 'Material Audit', icon: FileText },
     { key: 'CHATS', label: 'Chat Audit', icon: MessageSquare },
@@ -215,6 +273,205 @@ export default function Admin() {
               <p className="text-xs text-slate-400">
                 Manage curriculum packs for offline JSON export and board review.
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: TEACHERS / EDUCATORS */}
+      {activeTab === 'TEACHERS' && (
+        <div className="space-y-6 animate-in fade-in">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                <GraduationCap size={18} className="text-indigo-400" />
+                Educator Verification Requests ({teachersData?.length || 0})
+              </h2>
+            </div>
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/40 overflow-hidden divide-y divide-slate-800">
+              {loadingTeachers ? (
+                <div className="p-8 text-center text-xs text-slate-500">Loading educator accounts…</div>
+              ) : !teachersData?.length ? (
+                <div className="p-8 text-center text-xs text-slate-500">No pending or verified educator accounts yet.</div>
+              ) : (
+                teachersData.map((t) => (
+                  <div key={t.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-slate-100 text-sm">{t.name}</span>
+                        <span className="text-slate-400">({t.email})</span>
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                            t.teacherStatus === 'APPROVED'
+                              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                              : t.teacherStatus === 'REJECTED'
+                              ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                              : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                          }`}
+                        >
+                          {t.teacherStatus}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 text-slate-400">
+                        <span>{t.institution || 'No institution specified'}</span>
+                        <span>•</span>
+                        <span>Applied {new Date(t.createdAt).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {t.teacherStatus !== 'APPROVED' && (
+                        <button
+                          type="button"
+                          disabled={approveTeacherMutation.isPending}
+                          onClick={() => approveTeacherMutation.mutate(t.id)}
+                          className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                          <CheckCircle2 size={14} />
+                          Approve
+                        </button>
+                      )}
+                      {t.teacherStatus !== 'REJECTED' && (
+                        <button
+                          type="button"
+                          disabled={rejectTeacherMutation.isPending}
+                          onClick={() => rejectTeacherMutation.mutate(t.id)}
+                          className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-rose-950/40 text-slate-300 hover:text-rose-400 border border-slate-700 hover:border-rose-800 font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                          <XCircle size={14} />
+                          {t.teacherStatus === 'APPROVED' ? 'Revoke' : 'Reject'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <h2 className="text-base font-bold text-white flex items-center gap-2">
+              <KeyRound size={18} className="text-amber-400" />
+              Educator Invite Codes
+            </h2>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                createInviteMutation.mutate({
+                  email: inviteForm.email.trim() || undefined,
+                  maxUses: Number(inviteForm.maxUses) || 1,
+                  expiresInDays: Number(inviteForm.expiresInDays) || 14,
+                });
+              }}
+              className="rounded-2xl border border-slate-800 bg-slate-900/40 p-4 grid sm:grid-cols-4 gap-3 text-xs items-end"
+            >
+              <div>
+                <label className="block text-slate-400 mb-1 font-medium">Restrict to Email (optional)</label>
+                <input
+                  type="email"
+                  value={inviteForm.email}
+                  onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
+                  placeholder="faculty@school.edu"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1 font-medium">Max Uses</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={inviteForm.maxUses}
+                  onChange={(e) => setInviteForm({ ...inviteForm, maxUses: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200"
+                />
+              </div>
+              <div>
+                <label className="block text-slate-400 mb-1 font-medium">Expires In (Days)</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={inviteForm.expiresInDays}
+                  onChange={(e) => setInviteForm({ ...inviteForm, expiresInDays: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-slate-200"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={createInviteMutation.isPending}
+                className="px-4 py-2 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-semibold flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <Plus size={14} />
+                Generate Invite Code
+              </button>
+            </form>
+
+            <div className="rounded-2xl border border-slate-800 bg-slate-900/40 overflow-hidden divide-y divide-slate-800">
+              {loadingInvites ? (
+                <div className="p-8 text-center text-xs text-slate-500">Loading invite codes…</div>
+              ) : !invitesData?.length ? (
+                <div className="p-8 text-center text-xs text-slate-500">No educator invite codes created yet.</div>
+              ) : (
+                invitesData.map((inv) => {
+                  const exhausted = inv.usedCount >= inv.maxUses;
+                  const expired = inv.expiresAt && new Date(inv.expiresAt) < new Date();
+                  return (
+                    <div key={inv.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <code className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 font-mono text-indigo-400 font-semibold">
+                            {inv.code}
+                          </code>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard?.writeText(inv.code);
+                              showToast('Invite code copied', 'success');
+                            }}
+                            className="text-slate-400 hover:text-white cursor-pointer"
+                            title="Copy invite code"
+                          >
+                            <Copy size={13} />
+                          </button>
+                          {inv.isRevoked ? (
+                            <span className="px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-400 text-[10px] font-semibold">Revoked</span>
+                          ) : expired ? (
+                            <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px] font-semibold">Expired</span>
+                          ) : exhausted ? (
+                            <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-400 text-[10px] font-semibold">Used</span>
+                          ) : (
+                            <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400 text-[10px] font-semibold">Active</span>
+                          )}
+                        </div>
+                        <div className="text-slate-400 flex items-center gap-2 flex-wrap">
+                          <span>{inv.email ? `Bound to ${inv.email}` : 'Any email'}</span>
+                          <span>•</span>
+                          <span>Uses: {inv.usedCount}/{inv.maxUses}</span>
+                          {inv.expiresAt && (
+                            <>
+                              <span>•</span>
+                              <span>Expires {new Date(inv.expiresAt).toLocaleDateString()}</span>
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {!inv.isRevoked && !exhausted && !expired && (
+                        <button
+                          type="button"
+                          onClick={() => revokeInviteMutation.mutate(inv.id)}
+                          className="px-3 py-1 rounded-lg bg-slate-800 hover:bg-rose-950/40 text-slate-300 hover:text-rose-400 border border-slate-700 text-[11px] font-semibold cursor-pointer"
+                        >
+                          Revoke
+                        </button>
+                      )}
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         </div>

@@ -4,78 +4,72 @@ import * as geminiProvider from '../providers/geminiProvider.js';
 
 // Dynamically select Gemini if GEMINI_API_KEY is present or AI_PROVIDER === 'gemini'
 export const getProvider = () => {
-  if (process.env.AI_PROVIDER === 'custom') return customProvider;
-  if (process.env.GEMINI_API_KEY || process.env.AI_PROVIDER === 'gemini') return geminiProvider;
-  return groqProvider;
+    if (process.env.AI_PROVIDER === 'custom') return customProvider;
+    if (process.env.GEMINI_API_KEY || process.env.AI_PROVIDER === 'gemini') return geminiProvider;
+    return groqProvider;
 };
+
+const provider = getProvider();
 
 const extractJson = (raw) => {
-  const cleaned = raw.replace(/```json|```/g, '').trim();
-  const start = cleaned.indexOf('{');
-  const arrStart = cleaned.indexOf('[');
-  let candidate = cleaned;
-  if (start !== -1 && (arrStart === -1 || start < arrStart)) {
-    candidate = cleaned.slice(start);
-  } else if (arrStart !== -1) {
-    candidate = cleaned.slice(arrStart);
-  }
-  return JSON.parse(candidate);
-};
-
-const withJsonRetry = async ({ system, messages }) => {
-  let lastErr;
-  const prov = getProvider();
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const raw = await prov.generateCompletion({ system, messages, jsonMode: true });
-      return extractJson(raw);
-    } catch (err) {
-      lastErr = err;
-      messages = [...messages, { role: 'user', content: 'Your previous response was not valid JSON matching the schema. Return ONLY valid JSON, no prose.' }];
+    const cleaned = raw.replace(/```json|```/g, '').trim();
+    const start = cleaned.indexOf('{');
+    const arrStart = cleaned.indexOf('[');
+    let candidate = cleaned;
+    if (start !== -1 && (arrStart === -1 || start < arrStart)) {
+        candidate = cleaned.slice(start);
+    } else if (arrStart !== -1) {
+        candidate = cleaned.slice(arrStart);
     }
-  }
-  throw new Error(`AI returned malformed JSON after retry: ${lastErr.message}`);
+    return JSON.parse(candidate);
 };
 
-export const generateChatResponse = async ({ history, message, materialContext, topic }) => {
-  const system = [
-    'You are Studify\'s AI Mentor, an encouraging and precise educational tutor.',
-    'Explain concepts clearly, use short paragraphs, and give examples when helpful.',
-    topic ? `The student is currently studying: ${topic}.` : '',
-    materialContext ? `Relevant study material excerpt:\n${materialContext.slice(0, 4000)}` : '',
-  ].filter(Boolean).join('\n');
-
-  const messages = [
-    ...history.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
-    { role: 'user', content: message },
-  ];
-
-  const prov = getProvider();
-  try {
-    return await prov.generateCompletion({ system, messages });
-  } catch (err) {
-    console.error(`[AI Chat Service] AI generation failed: ${err.message}`);
-    return `Hello! I am your Studify AI Tutor. I'm currently having trouble connecting to the AI language model (Details: ${err.message?.slice(0, 90)}). Please ensure a valid \`GEMINI_API_KEY\` or \`GROQ_API_KEY\` is configured in your hosting environment settings. In the meantime, you can explore the Punjab Textbook Board chapters and practice tests directly in the Question Bank!`;
-  }
+const withJsonRetry = async({ system, messages }) => {
+    let lastErr;
+    for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+            const raw = await provider.generateCompletion({ system, messages, jsonMode: true });
+            return extractJson(raw);
+        } catch (err) {
+            lastErr = err;
+            messages = [...messages, { role: 'user', content: 'Your previous response was not valid JSON matching the schema. Return ONLY valid JSON, no prose.' }];
+        }
+    }
+    throw new Error(`AI returned malformed JSON after retry: ${lastErr.message}`);
 };
 
-export const generateSummary = async ({ text, title }) => {
-  const system = 'You are an educational summarizer. Given study material, produce: a concise summary, a bullet list of key points, and a bullet list of important definitions. Respond in Markdown with headings "## Summary", "## Key Points", "## Definitions".';
-  const messages = [{ role: 'user', content: `Material title: ${title || 'Untitled'}\n\n${text.slice(0, 12000)}` }];
-  const prov = getProvider();
-  return prov.generateCompletion({ system, messages });
+export const generateChatResponse = async({ history, message, materialContext, topic }) => {
+    const system = [
+        'You are Studify\'s AI Mentor, an encouraging and precise educational tutor.',
+        'Explain concepts clearly, use short paragraphs, and give examples when helpful.',
+        topic ? `The student is currently studying: ${topic}.` : '',
+        materialContext ? `Relevant study material excerpt:\n${materialContext.slice(0, 4000)}` : '',
+    ].filter(Boolean).join('\n');
+
+    const messages = [
+        ...history.map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: m.content })),
+        { role: 'user', content: message },
+    ];
+
+    return provider.generateCompletion({ system, messages });
 };
 
-export const generateQuiz = async ({ topic, subject, difficulty, numQuestions, materialText }) => {
-  const system = [
-    'You generate structured educational quizzes.',
-    'Respond with ONLY valid JSON matching exactly this schema:',
-    '{"title": string, "questions": [{"question": string, "type": "mcq"|"true_false"|"fill_blank", "options": string[] | null, "correctAnswer": string, "explanation": string}]}',
-    'For "mcq" always include 4 options. For "true_false" options must be ["True","False"]. For "fill_blank" options must be null.',
-  ].join('\n');
-  const messages = [{
-    role: 'user',
-    content: `Create a ${difficulty} quiz with ${numQuestions} questions on topic "${topic}"${subject ? ` (subject: ${subject})` : ''}.${materialText ? `\nBase it on this material:\n${materialText.slice(0, 6000)}` : ''}`,
+export const generateSummary = async({ text, title }) => {
+    const system = 'You are an educational summarizer. Given study material, produce: a concise summary, a bullet list of key points, and a bullet list of important definitions. Respond in Markdown with headings "## Summary", "## Key Points", "## Definitions".';
+    const messages = [{ role: 'user', content: `Material title: ${title || 'Untitled'}\n\n${text.slice(0, 12000)}` }];
+    return provider.generateCompletion({ system, messages });
+};
+
+export const generateQuiz = async({ topic, subject, difficulty, numQuestions, materialText }) => {
+        const system = [
+            'You generate structured educational quizzes.',
+            'Respond with ONLY valid JSON matching exactly this schema:',
+            '{"title": string, "questions": [{"question": string, "type": "mcq"|"true_false"|"fill_blank", "options": string[] | null, "correctAnswer": string, "explanation": string}]}',
+            'For "mcq" always include 4 options. For "true_false" options must be ["True","False"]. For "fill_blank" options must be null.',
+        ].join('\n');
+        const messages = [{
+                    role: 'user',
+                    content: `Create a ${difficulty} quiz with ${numQuestions} questions on topic "${topic}"${subject ? ` (subject: ${subject})` : ''}.${materialText ? `\nBase it on this material:\n${materialText.slice(0, 6000)}` : ''}`,
   }];
   const data = await withJsonRetry({ system, messages });
   if (!data.questions || !Array.isArray(data.questions) || data.questions.length === 0) {
@@ -159,4 +153,3 @@ Provide a deep, constructive diagnostic to help this matric student ace their up
     };
   }
 };
-

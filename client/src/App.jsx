@@ -37,6 +37,14 @@ import TestHistory from './pages/TestHistory.jsx';
 import DailyArena from './pages/DailyArena.jsx';
 import NotFound from './pages/NotFound.jsx';
 import Landing from './pages/Landing.jsx';
+import Classrooms from './pages/Classrooms.jsx';
+import ClassroomDetail from './pages/ClassroomDetail.jsx';
+import TeacherDashboard from './pages/TeacherDashboard.jsx';
+import TeacherClassrooms from './pages/TeacherClassrooms.jsx';
+import TeacherClassroomDetail from './pages/TeacherClassroomDetail.jsx';
+import TeacherQuizzes from './pages/TeacherQuizzes.jsx';
+import TeacherQuizBuilder from './pages/TeacherQuizBuilder.jsx';
+import TeacherAnalytics from './pages/TeacherAnalytics.jsx';
 
 export default function App() {
   return (
@@ -82,6 +90,18 @@ export default function App() {
           <Route path="/progress" element={<Progress />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/classrooms" element={<Classrooms />} />
+          <Route path="/classrooms/join/:token" element={<Classrooms />} />
+          <Route path="/classrooms/:id" element={<ClassroomDetail />} />
+          <Route element={<ProtectedRoute teacherOnly />}>
+            <Route path="/teacher/dashboard" element={<TeacherDashboard />} />
+            <Route path="/teacher/classrooms" element={<TeacherClassrooms />} />
+            <Route path="/teacher/classrooms/:id" element={<TeacherClassroomDetail />} />
+            <Route path="/teacher/quizzes" element={<TeacherQuizzes />} />
+            <Route path="/teacher/quizzes/create" element={<TeacherQuizBuilder />} />
+            <Route path="/teacher/analytics" element={<TeacherAnalytics />} />
+            <Route path="/teacher/settings" element={<Settings />} />
+          </Route>
           <Route element={<ProtectedRoute adminOnly />}>
             <Route path="/admin" element={<Admin />} />
             <Route path="/admin/questions" element={<AdminQuestions />} />

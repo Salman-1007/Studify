@@ -1,19 +1,193 @@
 @import "tailwindcss";
 
-:root {
+:root,
+:root[data-theme="dark"] {
   --studify-bg: #0A0F1E;
   --studify-blue: #3B82F6;
   --studify-green: #10B981;
   --studify-amber: #F59E0B;
+
+  --bg-primary: #0B1120;
+  --bg-secondary: #0A0F1E;
+  --bg-surface: #0F172A;
+  --bg-elevated: #1E293B;
+  --bg-input: #0F172A;
+
+  --text-primary: #F1F5F9;
+  --text-secondary: #CBD5E1;
+  --text-muted: #94A3B8;
+
+  --border-primary: #1E293B;
+  --border-secondary: #334155;
+
+  --accent-primary: #4F46E5;
+  --accent-blue: #3B82F6;
+  --accent-success: #10B981;
+  --accent-warning: #F59E0B;
+  --accent-danger: #EF4444;
+  --shadow-card: 0 10px 30px -12px rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme="light"] {
+  --studify-bg: #F8FAFC;
+  --studify-blue: #4F46E5;
+  --studify-green: #10B981;
+  --studify-amber: #F59E0B;
+
+  --bg-primary: #F8FAFC;
+  --bg-secondary: #F4F6F9;
+  --bg-surface: #FFFFFF;
+  --bg-elevated: #FFFFFF;
+  --bg-input: #FFFFFF;
+
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --text-muted: #64748B;
+
+  --border-primary: #E2E8F0;
+  --border-secondary: #CBD5E1;
+
+  --accent-primary: #4F46E5;
+  --accent-blue: #4F46E5;
+  --accent-success: #10B981;
+  --accent-warning: #F59E0B;
+  --accent-danger: #EF4444;
+  --shadow-card: 0 4px 20px -6px rgba(15, 23, 42, 0.08);
 }
 
 body {
   font-family: 'Inter', system-ui, sans-serif;
-  background-color: #0B1120;
-  color: #E5E7EB;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 ::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: #1F2937; border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: var(--border-secondary); border-radius: 4px; }
+
+/* Semantic utility classes for new & upgraded UI */
+.theme-bg-primary { background-color: var(--bg-primary); }
+.theme-bg-secondary { background-color: var(--bg-secondary); }
+.theme-surface { background-color: var(--bg-surface); border-color: var(--border-primary); box-shadow: var(--shadow-card); }
+.theme-elevated { background-color: var(--bg-elevated); border-color: var(--border-primary); }
+.theme-text-primary { color: var(--text-primary); }
+.theme-text-secondary { color: var(--text-secondary); }
+.theme-text-muted { color: var(--text-muted); }
+.theme-border { border-color: var(--border-primary); }
+
+/* Light-theme compatibility layer for existing Tailwind dark-coded pages */
+:root[data-theme="light"] .bg-\[\#0B1120\],
+:root[data-theme="light"] .bg-\[\#0A0F1E\] {
+  background-color: var(--bg-primary) !important;
+}
+
+:root[data-theme="light"] aside.bg-\[\#0A0F1E\],
+:root[data-theme="light"] header.bg-\[\#0B1120\] {
+  background-color: var(--bg-surface) !important;
+}
+
+:root[data-theme="light"] .bg-slate-950,
+:root[data-theme="light"] .bg-slate-950\/40,
+:root[data-theme="light"] .bg-slate-950\/60 {
+  background-color: var(--bg-secondary) !important;
+}
+
+:root[data-theme="light"] .bg-slate-900,
+:root[data-theme="light"] .bg-slate-900\/30,
+:root[data-theme="light"] .bg-slate-900\/40,
+:root[data-theme="light"] .bg-slate-900\/50,
+:root[data-theme="light"] .bg-slate-900\/60,
+:root[data-theme="light"] .bg-slate-900\/90 {
+  background-color: var(--bg-surface) !important;
+}
+
+:root[data-theme="light"] .bg-slate-800,
+:root[data-theme="light"] .bg-slate-800\/40,
+:root[data-theme="light"] .bg-slate-800\/50,
+:root[data-theme="light"] .bg-slate-800\/60,
+:root[data-theme="light"] .bg-slate-800\/80 {
+  background-color: #EEF2F6 !important;
+}
+
+:root[data-theme="light"] .border-slate-800,
+:root[data-theme="light"] .border-slate-800\/80,
+:root[data-theme="light"] .border-slate-800\/60,
+:root[data-theme="light"] .divide-slate-800 > :not(:last-child),
+:root[data-theme="light"] .divide-slate-800\/80 > :not(:last-child),
+:root[data-theme="light"] .divide-slate-800\/60 > :not(:last-child) {
+  border-color: var(--border-primary) !important;
+}
+
+:root[data-theme="light"] .border-slate-700,
+:root[data-theme="light"] .border-slate-700\/80,
+:root[data-theme="light"] .border-slate-700\/60 {
+  border-color: var(--border-secondary) !important;
+}
+
+:root[data-theme="light"] .text-slate-100,
+:root[data-theme="light"] .text-slate-200 {
+  color: var(--text-primary) !important;
+}
+
+:root[data-theme="light"] .text-slate-300 {
+  color: var(--text-secondary) !important;
+}
+
+:root[data-theme="light"] .text-slate-400,
+:root[data-theme="light"] .text-slate-500 {
+  color: var(--text-muted) !important;
+}
+
+:root[data-theme="light"] h1.text-white,
+:root[data-theme="light"] h2.text-white,
+:root[data-theme="light"] h3.text-white,
+:root[data-theme="light"] h4.text-white,
+:root[data-theme="light"] span.text-white,
+:root[data-theme="light"] p.text-white {
+  color: var(--text-primary) !important;
+}
+
+/* Preserve white text on explicit accent/gradient surfaces in light mode */
+:root[data-theme="light"] [class*="bg-blue-500"].text-white,
+:root[data-theme="light"] [class*="bg-blue-600"].text-white,
+:root[data-theme="light"] [class*="bg-indigo-"].text-white,
+:root[data-theme="light"] [class*="bg-emerald-"].text-white,
+:root[data-theme="light"] [class*="bg-orange-"].text-white,
+:root[data-theme="light"] [class*="bg-rose-"].text-white,
+:root[data-theme="light"] [class*="bg-gradient-to-"].text-white,
+:root[data-theme="light"] [class*="bg-blue-500"] .text-white,
+:root[data-theme="light"] [class*="bg-blue-600"] .text-white,
+:root[data-theme="light"] [class*="bg-indigo-"] .text-white,
+:root[data-theme="light"] [class*="bg-emerald-"] .text-white,
+:root[data-theme="light"] [class*="bg-orange-"] .text-white,
+:root[data-theme="light"] [class*="bg-gradient-to-"] .text-white {
+  color: #FFFFFF !important;
+}
+
+:root[data-theme="light"] .hover\:bg-slate-800:hover,
+:root[data-theme="light"] .hover\:bg-slate-800\/60:hover,
+:root[data-theme="light"] .hover\:bg-slate-800\/50:hover,
+:root[data-theme="light"] .hover\:bg-slate-800\/40:hover {
+  background-color: #E2E8F0 !important;
+}
+
+:root[data-theme="light"] input,
+:root[data-theme="light"] select,
+:root[data-theme="light"] textarea {
+  color: var(--text-primary);
+}
 
 @plugin "@tailwindcss/typography";
