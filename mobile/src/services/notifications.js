@@ -6,13 +6,17 @@ import apiClient from '../api/client';
 import { getItem, setItem, removeItem } from '../utils/storage';
 
 // Configure notification presentation when app is foregrounded
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+try {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
+} catch (err) {
+  console.warn('[Notifications] setNotificationHandler initialization notice:', err?.message || err);
+}
 
 /**
  * Configure Android notification channels for standalone sideloaded APKs.
@@ -20,16 +24,20 @@ Notifications.setNotificationHandler({
  */
 export const setupNotificationChannels = async () => {
   if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default', {
-      name: 'Studify Notifications',
-      importance: Notifications.AndroidImportance.MAX,
-      vibrationPattern: [0, 250, 250, 250],
-      lightColor: '#3B82F6',
-      enableLights: true,
-      enableVibrate: true,
-      showBadge: true,
-      sound: 'default',
-    });
+    try {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'Studify Notifications',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#3B82F6',
+        enableLights: true,
+        enableVibrate: true,
+        showBadge: true,
+        sound: 'default',
+      });
+    } catch (chanErr) {
+      console.warn('[Notifications] Channel setup notice:', chanErr?.message || chanErr);
+    }
   }
 };
 
@@ -113,21 +121,36 @@ export const unregisterPushNotificationsAsync = async () => {
  * Attaches notification listeners for deep linking.
  */
 export const attachNotificationListeners = ({ onNotificationReceived, onNotificationResponse }) => {
-  const receivedSub = Notifications.addNotificationReceivedListener((notification) => {
-    if (typeof onNotificationReceived === 'function') {
-      onNotificationReceived(notification);
-    }
-  });
+  let receivedSub = null;
+  let responseSub = null;
 
-  const responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
-    const data = response?.notification?.request?.content?.data;
-    if (typeof onNotificationResponse === 'function') {
-      onNotificationResponse(data);
-    }
-  });
+  try {
+    receivedSub = Notifications.addNotificationReceivedListener((notification) => {
+      if (typeof onNotificationReceived === 'function') {
+        onNotificationReceived(notification);
+      }
+    });
+  } catch (err) {
+    console.warn('[Notifications] Error attaching received listener:', err?.message || err);
+  }
+
+  try {
+    responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const data = response?.notification?.request?.content?.data;
+      if (typeof onNotificationResponse === 'function') {
+        onNotificationResponse(data);
+      }
+    });
+  } catch (err) {
+    console.warn('[Notifications] Error attaching response listener:', err?.message || err);
+  }
 
   return () => {
-    receivedSub.remove();
-    responseSub.remove();
+    try {
+      receivedSub?.remove?.();
+      responseSub?.remove?.();
+    } catch {
+      // Safe cleanup
+    }
   };
 };

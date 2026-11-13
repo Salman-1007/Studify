@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { registerRootComponent } from 'expo';
 
 import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
@@ -206,6 +207,8 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
+
+registerRootComponent(App);
 
 const styles = StyleSheet.create({
   safeArea: {

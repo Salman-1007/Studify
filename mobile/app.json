@@ -24,7 +24,6 @@
       },
       "permissions": [
         "android.permission.POST_NOTIFICATIONS",
-        "android.permission.NOTIFICATIONS",
         "android.permission.INTERNET",
         "android.permission.VIBRATE",
         "android.permission.CAMERA",
