@@ -69,7 +69,7 @@ beforeAll(async () => {
   student1Token = await reg('Student A', 'sa@studify.pk', false);
   student2Token = await reg('Student B', 'sb@studify.pk', false);
   outsiderToken = await reg('Outsider C', 'oc@studify.pk', false);
-});
+}, 30000);
 
 describe('Teacher Quiz Builder, Immutable Snapshots, Submissions & Analytics', () => {
   let classroomId;

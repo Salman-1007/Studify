@@ -126,6 +126,8 @@ model User {
   directMessageDeletions      DirectMessageDeletion[]
   directMessageReceipts       DirectMessageReceipt[]
   conversationPreferences     ConversationPreference[]
+  pushTokens                  PushToken[]
+  appNotifications            AppNotification[]
 }
 
 model RefreshToken {
@@ -410,6 +412,33 @@ model Notification {
 
   @@index([userId, isRead])
   @@index([userId, dedupeKey])
+}
+
+model PushToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  platform  String   // "android" | "ios"
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model AppNotification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  type      String   // "CHAT_MESSAGE" | "NEW_QUIZ" | "QUIZ_RESULT" | "CLASS_JOIN" | "ANNOUNCEMENT"
+  data      Json?    // Deep link payload e.g. { screen: "ChatRoom", chatId: "..." }
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
 }
 
 model Achievement {

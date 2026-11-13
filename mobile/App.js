@@ -1,225 +1,243 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
-  Text,
   View,
-  SafeAreaView,
-  StatusBar,
-  TouchableOpacity,
-  ScrollView,
+  Text,
   ActivityIndicator,
 } from 'react-native';
-import { registerForPushNotificationsAsync } from './src/services/notifications';
-import apiClient from './src/api/client';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
 
-export default function App() {
-  const [status, setStatus] = useState(null);
-  const [loading, setLoading] = useState(true);
+import { ThemeProvider, useTheme } from './src/context/ThemeContext';
+import { AuthProvider, useAuth } from './src/context/AuthContext';
+import {
+  registerForPushNotificationsAsync,
+  attachNotificationListeners,
+} from './src/services/notifications';
 
+// Components & Screens
+import StudifyLogo from './src/components/StudifyLogo';
+import TabBar from './src/components/TabBar';
+import LoginScreen from './src/screens/LoginScreen';
+import SignupScreen from './src/screens/SignupScreen';
+import DashboardScreen from './src/screens/DashboardScreen';
+import QuizzesScreen from './src/screens/QuizzesScreen';
+import ClassroomsScreen from './src/screens/ClassroomsScreen';
+import ChatScreen from './src/screens/ChatScreen';
+import ProfileScreen from './src/screens/ProfileScreen';
+
+// Teacher Screens
+import TeacherDashboardScreen from './src/screens/TeacherDashboardScreen';
+import TeacherClassroomsScreen from './src/screens/TeacherClassroomsScreen';
+import NoteToQuizScreen from './src/screens/NoteToQuizScreen';
+import ClassAnalyticsScreen from './src/screens/ClassAnalyticsScreen';
+
+function AppContent() {
+  const { theme, isDark } = useTheme();
+  const { isAuthenticated, isTeacher, loading } = useAuth();
+
+  const [authView, setAuthView] = useState('login'); // 'login' | 'signup'
+  const [activeTab, setActiveTab] = useState(isTeacher ? 'teacherDashboard' : 'dashboard');
+  const [activeTrack, setActiveTrack] = useState(null);
+  const [activeChatClassroom, setActiveChatClassroom] = useState(null);
+
+  // Initialize push notification listeners and channels on mount
   useEffect(() => {
-    // 1. Initialize push notifications
     registerForPushNotificationsAsync();
 
-    // 2. Fetch daily arena status
-    apiClient
-      .get('/daily-arena/status')
-      .then((res) => {
-        setStatus(res.data?.data);
-      })
-      .catch((err) => {
-        console.log('Daily arena check:', err.message);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
+    const unsubscribe = attachNotificationListeners({
+      onNotificationReceived: (notification) => {
+        console.log('[App] Foreground notification received:', notification.request.content.title);
+      },
+      onNotificationResponse: (data) => {
+        console.log('[App] Notification tapped with deep link data:', data);
+        if (data?.screen === 'ChatRoom') {
+          setActiveTab('chat');
+        } else if (data?.screen === 'QuizRunner') {
+          setActiveTab('quizzes');
+        }
+      },
+    });
+
+    return () => {
+      if (typeof unsubscribe === 'function') unsubscribe();
+    };
   }, []);
 
+  // Sync initial tab when auth/role changes
+  useEffect(() => {
+    if (isTeacher) {
+      setActiveTab('teacherDashboard');
+    } else {
+      setActiveTab('dashboard');
+    }
+  }, [isTeacher]);
+
+  // Loading Screen
+  if (loading) {
+    return (
+      <SafeAreaView style={[styles.loadingContainer, { backgroundColor: theme.bg }]}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        <StudifyLogo size={78} style={{ marginBottom: 16 }} />
+        <Text style={[styles.splashTitle, { color: theme.text }]}>Studify</Text>
+        <Text style={[styles.splashSub, { color: theme.textMuted }]}>
+          Pakistan Education Ecosystem
+        </Text>
+        <ActivityIndicator color={theme.primary} style={{ marginTop: 24 }} />
+      </SafeAreaView>
+    );
+  }
+
+  // Unauthenticated Flow
+  if (!isAuthenticated) {
+    return (
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.bg }]}>
+        <StatusBar style={isDark ? 'light' : 'dark'} />
+        {authView === 'login' ? (
+          <LoginScreen onNavigateSignup={() => setAuthView('signup')} />
+        ) : (
+          <SignupScreen onNavigateLogin={() => setAuthView('login')} />
+        )}
+      </SafeAreaView>
+    );
+  }
+
+  // Authenticated Role-Aware Navigation
+  const renderScreen = () => {
+    if (isTeacher) {
+      switch (activeTab) {
+        case 'teacherDashboard':
+          return (
+            <TeacherDashboardScreen
+              onNavigateTab={(tab) => setActiveTab(tab)}
+            />
+          );
+        case 'teacherClassrooms':
+          return <TeacherClassroomsScreen />;
+        case 'noteToQuiz':
+          return (
+            <NoteToQuizScreen
+              onQuizCreated={() => setActiveTab('teacherClassrooms')}
+            />
+          );
+        case 'analytics':
+          return <ClassAnalyticsScreen />;
+        case 'profile':
+          return <ProfileScreen />;
+        default:
+          return <TeacherDashboardScreen onNavigateTab={(tab) => setActiveTab(tab)} />;
+      }
+    }
+
+    // Student Views
+    switch (activeTab) {
+      case 'dashboard':
+        return (
+          <DashboardScreen
+            onSelectTrack={(track) => {
+              setActiveTrack(track);
+              setActiveTab('quizzes');
+            }}
+            onEnterArena={() => {
+              setActiveTrack({ name: 'Daily Mock Arena' });
+              setActiveTab('quizzes');
+            }}
+          />
+        );
+      case 'quizzes':
+        return (
+          <QuizzesScreen
+            initialTrack={activeTrack}
+            onBack={() => {
+              setActiveTrack(null);
+              setActiveTab('dashboard');
+            }}
+          />
+        );
+      case 'classrooms':
+        return (
+          <ClassroomsScreen
+            onOpenChat={(classroom) => {
+              setActiveChatClassroom(classroom);
+              setActiveTab('chat');
+            }}
+          />
+        );
+      case 'chat':
+        return (
+          <ChatScreen
+            targetClassroom={activeChatClassroom}
+            onBack={() => {
+              setActiveChatClassroom(null);
+              setActiveTab('classrooms');
+            }}
+          />
+        );
+      case 'profile':
+        return <ProfileScreen />;
+      default:
+        return <DashboardScreen />;
+    }
+  };
+
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0A0F1E" />
-      <ScrollView contentContainerStyle={styles.scroll}>
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.logoBadge}>
-            <Text style={styles.logoText}>S</Text>
-          </View>
-          <Text style={styles.title}>Studify</Text>
-          <Text style={styles.subtitle}>Pakistani Curriculum & Entry Test Prep</Text>
-        </View>
-
-        {/* Daily Mock Arena Card */}
-        <View style={styles.arenaCard}>
-          <View style={styles.badgeRow}>
-            <Text style={styles.badgeText}>🔥 DAILY ARENA LIVE</Text>
-            <Text style={styles.xpText}>+50 XP BONUS</Text>
-          </View>
-          <Text style={styles.cardTitle}>Daily Mock Exam Challenge</Text>
-          <Text style={styles.cardDesc}>
-            Take today's timed mock across Class 9–12, MDCAT (PMDC) & ECAT (UET). Maintain your streak!
-          </Text>
-
-          {loading ? (
-            <ActivityIndicator color="#3B82F6" style={{ marginTop: 12 }} />
-          ) : (
-            <View style={styles.statusRow}>
-              <Text style={styles.statLabel}>
-                Streak: <Text style={styles.statValue}>{status?.streakCount || 0} Days</Text>
-              </Text>
-              <Text style={styles.statLabel}>
-                Resets: <Text style={styles.statValue}>{status?.secondsUntilReset ? Math.floor(status.secondsUntilReset / 3600) + 'h left' : 'Today'}</Text>
-              </Text>
-            </View>
-          )}
-
-          <TouchableOpacity style={styles.primaryButton}>
-            <Text style={styles.primaryButtonText}>Enter Daily Arena</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Tracks Grid */}
-        <Text style={styles.sectionHeader}>Available Syllabuses</Text>
-        <View style={styles.grid}>
-          {['Class 9', 'Class 10', 'Class 11', 'Class 12', 'MDCAT (Medical)', 'ECAT (Engg)'].map(
-            (track, idx) => (
-              <View key={idx} style={styles.trackCard}>
-                <Text style={styles.trackTitle}>{track}</Text>
-                <Text style={styles.trackDesc}>Verified MCQs & Chapter Tests</Text>
-              </View>
-            )
-          )}
-        </View>
-      </ScrollView>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.bg }]}>
+      <StatusBar style={isDark ? 'light' : 'dark'} />
+      <View style={styles.mainContent}>{renderScreen()}</View>
+      <TabBar
+        activeTab={activeTab}
+        onTabChange={(tab) => {
+          setActiveTab(tab);
+        }}
+        isTeacher={isTeacher}
+      />
     </SafeAreaView>
   );
 }
 
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </ThemeProvider>
+    </SafeAreaProvider>
+  );
+}
+
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
-    backgroundColor: '#0A0F1E',
   },
-  scroll: {
-    padding: 20,
+  mainContent: {
+    flex: 1,
   },
-  header: {
-    alignItems: 'center',
-    marginVertical: 20,
-  },
-  logoBadge: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: '#3B82F6',
+  loadingContainer: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
   },
-  logoText: {
-    color: '#FFF',
-    fontSize: 24,
-    fontWeight: 'bold',
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    color: '#F8FAFC',
-  },
-  subtitle: {
-    fontSize: 13,
-    color: '#94A3B8',
-    marginTop: 4,
-  },
-  arenaCard: {
-    backgroundColor: '#0F172A',
-    borderRadius: 18,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(249, 115, 22, 0.3)',
-    marginTop: 10,
-    marginBottom: 24,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 10,
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FB923C',
-  },
-  xpText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#FBBF24',
-  },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#F8FAFC',
-    marginBottom: 6,
-  },
-  cardDesc: {
-    fontSize: 13,
-    color: '#94A3B8',
-    lineHeight: 18,
-  },
-  statusRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginVertical: 14,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderColor: '#1E293B',
-  },
-  statLabel: {
-    fontSize: 12,
-    color: '#94A3B8',
-  },
-  statValue: {
-    color: '#38BDF8',
-    fontWeight: '600',
-  },
-  primaryButton: {
-    backgroundColor: '#3B82F6',
-    borderRadius: 12,
-    paddingVertical: 12,
+  splashBadge: {
+    width: 68,
+    height: 68,
+    borderRadius: 20,
     alignItems: 'center',
-    marginTop: 6,
-  },
-  primaryButtonText: {
-    color: '#FFF',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  sectionHeader: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#F8FAFC',
+    justifyContent: 'center',
     marginBottom: 12,
   },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: 12,
+  splashBadgeText: {
+    color: '#FFF',
+    fontSize: 36,
+    fontWeight: '900',
   },
-  trackCard: {
-    width: '48%',
-    backgroundColor: '#0F172A',
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#1E293B',
+  splashTitle: {
+    fontSize: 24,
+    fontWeight: '800',
   },
-  trackTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#E2E8F0',
-    marginBottom: 4,
-  },
-  trackDesc: {
-    fontSize: 11,
-    color: '#64748B',
+  splashSub: {
+    fontSize: 12,
+    marginTop: 4,
   },
 });

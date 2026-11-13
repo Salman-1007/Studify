@@ -351,7 +351,7 @@ export const createFakePrisma = () => {
         'classroomAnnouncement', 'classroomQuizAssignment', 'quizSubmission',
         'groupMessageReaction', 'groupMessageDeletion', 'groupMessageReceipt',
         'directMessageReaction', 'directMessageDeletion', 'directMessageReceipt',
-        'conversationPreference',
+        'conversationPreference', 'pushToken', 'appNotification',
     ];
 
     const prisma = {

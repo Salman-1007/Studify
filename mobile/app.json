@@ -5,9 +5,11 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "scheme": "studify",
     "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
       "backgroundColor": "#0A0F1E"
     },
     "ios": {
@@ -15,13 +17,20 @@
       "bundleIdentifier": "com.studify.app"
     },
     "android": {
+      "package": "com.studify.app",
       "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0A0F1E"
       },
-      "package": "com.studify.app",
       "permissions": [
-        "NOTIFICATIONS",
-        "INTERNET"
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.NOTIFICATIONS",
+        "android.permission.INTERNET",
+        "android.permission.VIBRATE",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "plugins": [
@@ -32,12 +41,23 @@
           "color": "#3B82F6",
           "sounds": []
         }
-      ]
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Studify to access your photos to attach handwritten notes.",
+          "cameraPermission": "Allow Studify to use your camera to photograph study notes."
+        }
+      ],
+      "expo-document-picker",
+      "expo-secure-store",
+      "expo-status-bar"
     ],
     "extra": {
       "eas": {
-        "projectId": ""
+        "projectId": "40cc705b-67a9-4cb8-b33c-12f9987cc15c"
       }
-    }
+    },
+    "owner": "salmandevs786"
   }
 }

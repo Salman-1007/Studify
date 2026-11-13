@@ -1,4 +1,5 @@
 import { prisma } from '../config/db.js';
+import { sendPushToUser } from './pushService.js';
 
 let ioRef = null;
 
@@ -44,6 +45,21 @@ export const createNotification = async ({
   if (ioRef) {
     ioRef.to(`user:${userId}`).emit('notification:new', notification);
   }
+
+  // Asynchronously dispatch mobile push notification
+  sendPushToUser(userId, {
+    title: title || 'Studify Update',
+    body: message,
+    type: type || 'ANNOUNCEMENT',
+    data: {
+      notificationId: notification.id,
+      link,
+      metadata,
+    },
+  }).catch((err) => {
+    // Non-blocking mobile push
+    console.warn('[NotificationService] Push delivery notice:', err?.message || err);
+  });
 
   return notification;
 };

@@ -1,5 +1,6 @@
 import { prisma } from '../config/db.js';
 import { ApiError } from '../utils/ApiError.js';
+import { sendPushToUser, sendPushToUsers } from './pushService.js';
 
 export const ALLOWED_EMOJIS = ['👍', '❤️', '😂', '🔥', '✅'];
 export const ALLOWED_MESSAGE_TYPES = [
@@ -336,7 +337,60 @@ export const createScopedMessage = async({
         });
     }
 
-    return serializeMessage(message, senderId);
+    const serialized = serializeMessage(message, senderId);
+
+    // Asynchronously dispatch mobile push notification
+    (async () => {
+        try {
+            const senderName = message.sender?.name || 'Someone';
+            const bodyPreview = (message.content || 'Sent an attachment').slice(0, 100);
+
+            if (scope === 'DIRECT') {
+                const chat = await prisma.directChat.findUnique({ where: { id: targetId } });
+                if (chat) {
+                    const recipientId = chat.user1Id === senderId ? chat.user2Id : chat.user1Id;
+                    await sendPushToUser(recipientId, {
+                        title: senderName,
+                        body: bodyPreview,
+                        type: 'CHAT_MESSAGE',
+                        data: {
+                            screen: 'ChatRoom',
+                            scope: 'DIRECT',
+                            chatId: targetId,
+                            senderId,
+                        },
+                    });
+                }
+            } else if (scope === 'GROUP') {
+                const members = await prisma.groupMember.findMany({
+                    where: { groupId: targetId, userId: { not: senderId } },
+                    select: { userId: true },
+                });
+                const group = await prisma.studyGroup.findUnique({
+                    where: { id: targetId },
+                    select: { name: true },
+                });
+                const groupName = group?.name || 'Study Group';
+                const userIds = members.map((m) => m.userId);
+                await sendPushToUsers(userIds, {
+                    title: `${groupName}: ${senderName}`,
+                    body: bodyPreview,
+                    type: 'CHAT_MESSAGE',
+                    data: {
+                        screen: 'ChatRoom',
+                        scope: 'GROUP',
+                        groupId: targetId,
+                        senderId,
+                    },
+                });
+            }
+        } catch (err) {
+            // Mobile push should not fail socket message send
+            console.warn('[MessagingService] Push dispatch notice:', err?.message || err);
+        }
+    })();
+
+    return serialized;
 };
 
 export const editScopedMessage = async({ scope, messageId, userId, content }) => {
