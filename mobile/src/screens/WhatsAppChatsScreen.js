@@ -22,12 +22,64 @@ import {
   SearchIcon,
   MoreVerticalIcon,
   CheckCheckIcon,
+  CheckIcon,
   SendIcon,
   ArrowLeftIcon,
   PlusIcon,
   UsersIcon,
   PaperclipIcon,
 } from '../components/Icons';
+
+export function formatActivityPresence(presence) {
+  if (!presence) return { isOnline: false, text: 'offline' };
+  if (presence.showOnlineStatus === false) {
+    return { isOnline: false, text: 'last seen recently' };
+  }
+  if (presence.online) {
+    return { isOnline: true, text: 'online' };
+  }
+  if (!presence.lastSeenAt) {
+    return { isOnline: false, text: 'offline' };
+  }
+
+  const date = new Date(presence.lastSeenAt);
+  if (isNaN(date.getTime())) return { isOnline: false, text: 'offline' };
+
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+
+  if (diffMins < 1) return { isOnline: false, text: 'last seen just now' };
+  if (diffMins < 60) return { isOnline: false, text: `last seen ${diffMins}m ago` };
+
+  const isToday = now.toDateString() === date.toDateString();
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const isYesterday = yesterday.toDateString() === date.toDateString();
+
+  const timeStr = date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+
+  if (isToday) {
+    return { isOnline: false, text: `last seen today at ${timeStr}` };
+  }
+  if (isYesterday) {
+    return { isOnline: false, text: `last seen yesterday at ${timeStr}` };
+  }
+  return {
+    isOnline: false,
+    text: `last seen ${date.toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${timeStr}`,
+  };
+}
+
+export function MessageStatusTick({ status, size = 13 }) {
+  if (status === 'SEEN') {
+    return <CheckCheckIcon size={size} color="#53BDEB" />;
+  }
+  if (status === 'DELIVERED') {
+    return <CheckCheckIcon size={size} color="rgba(255, 255, 255, 0.45)" />;
+  }
+  return <CheckIcon size={size} color="rgba(255, 255, 255, 0.45)" />;
+}
 
 export function getChatPartner(chat, currentUserId) {
   if (!chat) return { name: 'User', username: 'user', displayName: 'User', fallbackInitial: 'U' };
@@ -141,8 +193,83 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
         if (activeRoom?.type === 'direct' && newMsg.chatId === activeRoom.data.id) {
           setRoomMessages((prev) => [...prev, newMsg]);
           triggerHaptic('selection');
+
+          // If from partner, acknowledge receipt as seen
+          if (newMsg.senderId !== user?.id) {
+            socket.emit('direct:seen', {
+              chatId: activeRoom.data.id,
+              messageIds: [newMsg.id],
+            });
+            apiClient.post(`/direct-chats/${activeRoom.data.id}/read`).catch(() => {});
+          }
         }
         loadAllChats();
+      });
+
+      // Handle real-time presence updates (Online / Offline / Last seen)
+      socket.on('presence:update', ({ userId, online, lastSeenAt }) => {
+        setDirectChats((prev) =>
+          prev.map((c) => {
+            const p = c.partner || (c.user1Id === user?.id ? c.user2 : c.user1);
+            if (p && p.id === userId) {
+              return {
+                ...c,
+                partner: {
+                  ...p,
+                  presence: {
+                    ...p.presence,
+                    online: Boolean(online),
+                    lastSeenAt: lastSeenAt || new Date().toISOString(),
+                    showOnlineStatus: p.presence?.showOnlineStatus !== false,
+                  },
+                },
+              };
+            }
+            return c;
+          })
+        );
+
+        setActiveRoom((prev) => {
+          if (prev?.type === 'direct' && prev.partner?.id === userId) {
+            return {
+              ...prev,
+              partner: {
+                ...prev.partner,
+                presence: {
+                  ...prev.partner.presence,
+                  online: Boolean(online),
+                  lastSeenAt: lastSeenAt || new Date().toISOString(),
+                  showOnlineStatus: prev.partner.presence?.showOnlineStatus !== false,
+                },
+              },
+            };
+          }
+          return prev;
+        });
+      });
+
+      // Handle real-time read receipts (Legit Blue Ticks)
+      socket.on('direct:messages_seen', ({ chatId, messageIds }) => {
+        if (!Array.isArray(messageIds) || messageIds.length === 0) return;
+        setRoomMessages((prev) =>
+          prev.map((m) =>
+            messageIds.includes(m.id) ? { ...m, deliveryStatus: 'SEEN' } : m
+          )
+        );
+        setDirectChats((prev) =>
+          prev.map((c) => {
+            if (c.id === chatId && c.lastMessage && messageIds.includes(c.lastMessage.id)) {
+              return {
+                ...c,
+                lastMessage: {
+                  ...c.lastMessage,
+                  deliveryStatus: 'SEEN',
+                },
+              };
+            }
+            return c;
+          })
+        );
       });
 
       // Handle group message incoming
@@ -160,7 +287,7 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
     } catch {
       // Fallback to REST
     }
-  }, [token, activeRoom, loadAllChats]);
+  }, [token, activeRoom, user?.id, loadAllChats]);
 
   // ----------------------------------------------------
   // Open 1-on-1 Chat Room
@@ -172,6 +299,10 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
 
       setActiveRoom({ type: 'direct', data: chat, partner });
 
+      if (socketRef.current) {
+        socketRef.current.emit('direct:join', { chatId: chat.id });
+      }
+
       const res = await apiClient.get(`/direct-chats/${chat.id}/messages`);
       const msgs = res.data?.data?.messages || [];
       setRoomMessages(msgs);
@@ -181,8 +312,17 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
         setActiveRoom({ type: 'direct', data: chat, partner: freshPartner });
       }
 
-      // Mark read
+      // Mark read and broadcast seen receipt
       apiClient.post(`/direct-chats/${chat.id}/read`).catch(() => {});
+      if (msgs.length > 0 && socketRef.current) {
+        const unseenIds = msgs.filter((m) => m.senderId !== user?.id).map((m) => m.id);
+        if (unseenIds.length > 0) {
+          socketRef.current.emit('direct:seen', {
+            chatId: chat.id,
+            messageIds: unseenIds,
+          });
+        }
+      }
     } catch (err) {
       console.warn('[Chats] Open direct error:', err.message);
     }
@@ -220,16 +360,23 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
 
     if (activeRoom.type === 'direct') {
       const optimistic = {
-        id: String(Date.now()),
+        id: `opt-${Date.now()}`,
         senderId: user?.id,
         content: text,
         createdAt: new Date().toISOString(),
+        deliveryStatus: 'SENT',
       };
       setRoomMessages((prev) => [...prev, optimistic]);
       setSendingMsg(true);
 
       try {
-        await apiClient.post(`/direct-chats/${activeRoom.data.id}/messages`, { content: text });
+        const res = await apiClient.post(`/direct-chats/${activeRoom.data.id}/messages`, { content: text });
+        const createdMsg = res.data?.data?.message || res.data?.data;
+        if (createdMsg) {
+          setRoomMessages((prev) =>
+            prev.map((m) => (m.id === optimistic.id ? createdMsg : m))
+          );
+        }
       } catch (err) {
         console.warn('[Chats] Send direct error:', err.message);
       } finally {
@@ -357,11 +504,10 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
   if (activeRoom) {
     const isDirect = activeRoom.type === 'direct';
     const partner = isDirect ? (activeRoom.partner || getChatPartner(activeRoom.data, user?.id)) : null;
+    const presenceInfo = isDirect ? formatActivityPresence(partner?.presence) : null;
     const title = isDirect ? partner?.displayName || 'Chat' : activeRoom.data?.name || 'Group';
     const subtitle = isDirect
-      ? (partner?.name && partner?.username
-          ? `${partner.name} • ${partner.presence?.online ? 'Online' : 'Active'}`
-          : partner?.institution || (partner?.grade ? `Class ${partner.grade}` : 'Active Scholar'))
+      ? presenceInfo?.text || 'offline'
       : `${activeRoom.data?.subject || 'Circle'} • ${activeRoom.data?._count?.memberships || activeRoom.data?.memberCount || 1} members`;
 
     return (
@@ -385,11 +531,22 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
             <Text style={styles.roomAvatarText}>
               {title.charAt(0).toUpperCase()}
             </Text>
+            {isDirect && presenceInfo?.isOnline && (
+              <View style={styles.roomOnlineBadge} />
+            )}
           </View>
 
           <View style={styles.roomHeaderInfo}>
             <Text numberOfLines={1} style={styles.roomHeaderTitle}>{title}</Text>
-            <Text numberOfLines={1} style={styles.roomHeaderSub}>{subtitle}</Text>
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.roomHeaderSub,
+                isDirect && presenceInfo?.isOnline && { color: theme.waTeal, fontWeight: '700' },
+              ]}
+            >
+              {subtitle}
+            </Text>
           </View>
         </View>
 
@@ -434,7 +591,10 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
                     </Text>
                     {isMe && (
                       <View style={{ marginLeft: 4 }}>
-                        <CheckCheckIcon size={14} color={theme.waBlueCheck} />
+                        <MessageStatusTick
+                          status={m.deliveryStatus || (m.receipts?.some((r) => r.userId !== user?.id && r.seenAt) ? 'SEEN' : 'SENT')}
+                          size={14}
+                        />
                       </View>
                     )}
                   </View>
@@ -617,6 +777,7 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
           ) : (
             filteredDirect.map((chat) => {
               const partner = getChatPartner(chat, user?.id);
+              const presenceInfo = formatActivityPresence(partner.presence);
 
               const lastMsg = chat.lastMessage || chat.messages?.[0];
               const timeFormatted = lastMsg
@@ -636,7 +797,9 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
                     <Text style={[styles.waAvatarText, { color: theme.primary }]}>
                       {partner.fallbackInitial}
                     </Text>
-                    <View style={styles.onlineDot} />
+                    {presenceInfo.isOnline && (
+                      <View style={styles.onlineDot} />
+                    )}
                   </View>
 
                   <View style={styles.waRowContent}>
@@ -648,7 +811,10 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
                     <View style={styles.waMsgSnippetRow}>
                       {isMeLast && (
                         <View style={{ marginRight: 4 }}>
-                          <CheckCheckIcon size={14} color={theme.waBlueCheck} />
+                          <MessageStatusTick
+                            status={lastMsg?.deliveryStatus || (lastMsg?.receipts?.some((r) => r.userId !== user?.id && r.seenAt) ? 'SEEN' : 'SENT')}
+                            size={14}
+                          />
                         </View>
                       )}
                       <Text
@@ -1018,6 +1184,17 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 1,
     right: 1,
+    borderWidth: 1.5,
+    borderColor: '#0B0D13',
+  },
+  roomOnlineBadge: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: '#10B981',
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
     borderWidth: 1.5,
     borderColor: '#0B0D13',
   },

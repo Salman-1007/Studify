@@ -18,7 +18,7 @@ import Header from '../components/Header';
 import apiClient, { SOCKET_URL } from '../api/client';
 import { triggerHaptic } from '../utils/haptics';
 
-import { getChatPartner } from './WhatsAppChatsScreen';
+import { getChatPartner, formatActivityPresence, MessageStatusTick } from './WhatsAppChatsScreen';
 
 export default function DirectChatScreen({ onBack }) {
   const { user, token } = useAuth();
@@ -79,9 +79,78 @@ export default function DirectChatScreen({ onBack }) {
         if (activeChat && newMsg.chatId === activeChat.id) {
           setMessages((prev) => [...prev, newMsg]);
           triggerHaptic('selection');
+
+          if (newMsg.senderId !== user?.id) {
+            socket.emit('direct:seen', {
+              chatId: activeChat.id,
+              messageIds: [newMsg.id],
+            });
+            apiClient.post(`/direct-chats/${activeChat.id}/read`).catch(() => {});
+          }
         }
         // Update inbox preview in background
         loadConversations();
+      });
+
+      socket.on('presence:update', ({ userId, online, lastSeenAt }) => {
+        setConversations((prev) =>
+          prev.map((c) => {
+            const p = c.partner || (c.user1Id === user?.id ? c.user2 : c.user1);
+            if (p && p.id === userId) {
+              return {
+                ...c,
+                partner: {
+                  ...p,
+                  presence: {
+                    ...p.presence,
+                    online: Boolean(online),
+                    lastSeenAt: lastSeenAt || new Date().toISOString(),
+                    showOnlineStatus: p.presence?.showOnlineStatus !== false,
+                  },
+                },
+              };
+            }
+            return c;
+          })
+        );
+
+        setPartnerUser((prev) => {
+          if (prev?.id === userId) {
+            return {
+              ...prev,
+              presence: {
+                ...prev.presence,
+                online: Boolean(online),
+                lastSeenAt: lastSeenAt || new Date().toISOString(),
+                showOnlineStatus: prev.presence?.showOnlineStatus !== false,
+              },
+            };
+          }
+          return prev;
+        });
+      });
+
+      socket.on('direct:messages_seen', ({ chatId, messageIds }) => {
+        if (!Array.isArray(messageIds) || messageIds.length === 0) return;
+        setMessages((prev) =>
+          prev.map((m) =>
+            messageIds.includes(m.id) ? { ...m, deliveryStatus: 'SEEN' } : m
+          )
+        );
+        setConversations((prev) =>
+          prev.map((c) => {
+            if (c.id === chatId && c.lastMessage && messageIds.includes(c.lastMessage.id)) {
+              return {
+                ...c,
+                lastMessage: {
+                  ...c.lastMessage,
+                  deliveryStatus: 'SEEN',
+                },
+              };
+            }
+            return c;
+          })
+        );
       });
 
       return () => {
@@ -90,7 +159,7 @@ export default function DirectChatScreen({ onBack }) {
     } catch {
       // Fallback to REST polling
     }
-  }, [token, activeChat, loadConversations]);
+  }, [token, activeChat, user?.id, loadConversations]);
 
   // Search platform users
   const handleSearchUsers = async (query) => {
@@ -151,11 +220,29 @@ export default function DirectChatScreen({ onBack }) {
       setActiveChat(chat);
       setViewMode('room');
 
-      const res = await apiClient.get(`/direct-chats/${chat.id}/messages`);
-      setMessages(res.data?.data?.messages || []);
+      if (socketRef.current) {
+        socketRef.current.emit('direct:join', { chatId: chat.id });
+      }
 
-      // Mark read
+      const res = await apiClient.get(`/direct-chats/${chat.id}/messages`);
+      const msgs = res.data?.data?.messages || [];
+      setMessages(msgs);
+
+      if (res.data?.data?.partner) {
+        setPartnerUser(getChatPartner({ partner: res.data.data.partner }, user?.id));
+      }
+
+      // Mark read and broadcast seen receipt
       apiClient.post(`/direct-chats/${chat.id}/read`).catch(() => {});
+      if (msgs.length > 0 && socketRef.current) {
+        const unseenIds = msgs.filter((m) => m.senderId !== user?.id).map((m) => m.id);
+        if (unseenIds.length > 0) {
+          socketRef.current.emit('direct:seen', {
+            chatId: chat.id,
+            messageIds: unseenIds,
+          });
+        }
+      }
     } catch (err) {
       console.warn('[DirectChat] Open chat error:', err.message);
     }
@@ -169,16 +256,21 @@ export default function DirectChatScreen({ onBack }) {
     triggerHaptic('light');
 
     const optimisticMsg = {
-      id: String(Date.now()),
+      id: `opt-${Date.now()}`,
       senderId: user?.id,
       content,
       createdAt: new Date().toISOString(),
+      deliveryStatus: 'SENT',
     };
     setMessages((prev) => [...prev, optimisticMsg]);
     setSendingMessage(true);
 
     try {
-      await apiClient.post(`/direct-chats/${activeChat.id}/messages`, { content });
+      const res = await apiClient.post(`/direct-chats/${activeChat.id}/messages`, { content });
+      const createdMsg = res.data?.data?.message || res.data?.data;
+      if (createdMsg) {
+        setMessages((prev) => prev.map((m) => (m.id === optimisticMsg.id ? createdMsg : m)));
+      }
     } catch (err) {
       console.warn('[DirectChat] Send error:', err.message);
     } finally {
@@ -196,8 +288,8 @@ export default function DirectChatScreen({ onBack }) {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <Header
-          title={partnerUser.name || 'Direct Chat'}
-          subtitle={partnerUser.institution || partnerUser.grade ? `Class ${partnerUser.grade || ''}` : 'Active Conversation'}
+          title={partnerUser.displayName || partnerUser.name || 'Direct Chat'}
+          subtitle={formatActivityPresence(partnerUser.presence).text}
           showBack
           onBack={() => {
             setViewMode('inbox');
@@ -232,9 +324,17 @@ export default function DirectChatScreen({ onBack }) {
                   ]}
                 >
                   <Text style={[styles.msgText, { color: isMe ? '#FFF' : theme.text }]}>{m.content}</Text>
-                  <Text style={[styles.msgTime, { color: isMe ? 'rgba(255,255,255,0.7)' : theme.textMuted }]}>
-                    {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 2, gap: 4 }}>
+                    <Text style={[styles.msgTime, { color: isMe ? 'rgba(255,255,255,0.7)' : theme.textMuted }]}>
+                      {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                    {isMe && (
+                      <MessageStatusTick
+                        status={m.deliveryStatus || (m.receipts?.some((r) => r.userId !== user?.id && r.seenAt) ? 'SEEN' : 'SENT')}
+                        size={13}
+                      />
+                    )}
+                  </View>
                 </View>
               );
             })
@@ -377,8 +477,9 @@ export default function DirectChatScreen({ onBack }) {
         ) : (
           conversations.map((chat) => {
             const otherUser = getChatPartner(chat, user?.id);
-
+            const presenceInfo = formatActivityPresence(otherUser.presence);
             const lastMessage = chat.lastMessage || chat.messages?.[0];
+            const isMeLast = lastMessage?.senderId === user?.id;
 
             return (
               <TouchableOpacity
@@ -387,10 +488,13 @@ export default function DirectChatScreen({ onBack }) {
                 onPress={() => handleOpenChat(chat)}
                 style={[styles.convCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
               >
-                <View style={[styles.avatarCircle, { backgroundColor: `${theme.primary}25` }]}>
+                <View style={[styles.avatarCircle, { backgroundColor: `${theme.primary}25`, position: 'relative' }]}>
                   <Text style={[styles.avatarText, { color: theme.primary }]}>
                     {otherUser.fallbackInitial}
                   </Text>
+                  {presenceInfo.isOnline && (
+                    <View style={styles.onlineDot} />
+                  )}
                 </View>
 
                 <View style={styles.convInfo}>
@@ -402,9 +506,17 @@ export default function DirectChatScreen({ onBack }) {
                       </Text>
                     )}
                   </View>
-                  <Text numberOfLines={1} style={[styles.convLastMsg, { color: theme.textSecondary }]}>
-                    {lastMessage?.content || 'Tap to start conversation'}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    {isMeLast && (
+                      <MessageStatusTick
+                        status={lastMessage?.deliveryStatus || (lastMessage?.receipts?.some((r) => r.userId !== user?.id && r.seenAt) ? 'SEEN' : 'SENT')}
+                        size={13}
+                      />
+                    )}
+                    <Text numberOfLines={1} style={[styles.convLastMsg, { color: theme.textSecondary, flex: 1 }]}>
+                      {lastMessage?.content || 'Tap to start conversation'}
+                    </Text>
+                  </View>
                 </View>
 
                 {chat.unreadCount > 0 && (
@@ -469,6 +581,17 @@ const styles = StyleSheet.create({
   avatarText: {
     fontSize: 16,
     fontWeight: '800',
+  },
+  onlineDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#10B981',
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    borderWidth: 1.5,
+    borderColor: '#0B0D13',
   },
   userInfo: {
     flex: 1,
