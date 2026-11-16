@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import io from 'socket.io-client';
 import { useAuth } from '../context/AuthContext';
@@ -153,6 +154,23 @@ export default function DirectChatScreen({ onBack }) {
         );
       });
 
+      // Handle direct message unsent
+      socket.on('direct:message_unsent', ({ messageId, message }) => {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId
+              ? {
+                  ...m,
+                  isUnsent: true,
+                  isDeletedForEveryone: true,
+                  content: message?.content || 'This message was unsent',
+                }
+              : m
+          )
+        );
+        loadConversations();
+      });
+
       return () => {
         socket.disconnect();
       };
@@ -248,6 +266,168 @@ export default function DirectChatScreen({ onBack }) {
     }
   };
 
+  // Message options: Delete for me and Delete for everyone
+  const handleMessageLongPress = (msg) => {
+    if (msg.isUnsent || msg.isDeletedForEveryone) return;
+    triggerHaptic('impactMedium');
+
+    const isMe = msg.senderId === user?.id;
+    const targetId = activeChat?.id;
+    const options = [];
+
+    if (isMe || user?.role === 'ADMIN') {
+      options.push({
+        text: 'Delete for everyone',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            triggerHaptic('warning');
+            await apiClient.delete(`/direct-chats/messages/${msg.id}`);
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === msg.id
+                  ? { ...m, isUnsent: true, isDeletedForEveryone: true, content: 'This message was unsent' }
+                  : m
+              )
+            );
+            loadConversations();
+          } catch (err) {
+            Alert.alert('Error', err.response?.data?.message || 'Could not delete message for everyone.');
+          }
+        },
+      });
+    }
+
+    options.push({
+      text: 'Delete for me',
+      style: 'destructive',
+      onPress: async () => {
+        try {
+          triggerHaptic('light');
+          await apiClient.delete(`/direct-chats/${targetId}/messages/${msg.id}/for-me`);
+          setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+          loadConversations();
+        } catch (err) {
+          Alert.alert('Error', err.response?.data?.message || 'Could not delete message for me.');
+        }
+      },
+    });
+
+    options.push({ text: 'Cancel', style: 'cancel' });
+
+    Alert.alert('Message Options', 'Choose an action for this message:', options);
+  };
+
+  // Manage open conversation
+  const handleOpenChatOptions = () => {
+    if (!activeChat) return;
+    triggerHaptic('light');
+    const partner = partnerUser?.displayName || 'Chat';
+
+    Alert.alert(
+      partner,
+      'Manage this direct conversation:',
+      [
+        {
+          text: 'Clear Chat',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert('Clear Chat?', 'Clear all messages in this conversation?', [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Clear',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await apiClient.delete(`/direct-chats/${activeChat.id}`);
+                    setMessages([]);
+                    triggerHaptic('success');
+                    loadConversations();
+                  } catch (err) {
+                    Alert.alert('Error', err.response?.data?.message || 'Could not clear chat.');
+                  }
+                },
+              },
+            ]);
+          },
+        },
+        {
+          text: 'Delete Chat',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert('Delete Chat?', 'Remove this conversation from your inbox?', [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await apiClient.delete(`/direct-chats/${activeChat.id}`);
+                    setViewMode('inbox');
+                    triggerHaptic('success');
+                    loadConversations();
+                  } catch (err) {
+                    Alert.alert('Error', err.response?.data?.message || 'Could not delete chat.');
+                  }
+                },
+              },
+            ]);
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
+  // Long press on inbox card
+  const handleConversationLongPress = (chat) => {
+    triggerHaptic('impactMedium');
+    const otherUser = getChatPartner(chat, user?.id);
+
+    Alert.alert(
+      otherUser.displayName,
+      'Manage conversation:',
+      [
+        {
+          text: 'Clear Chat History',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await apiClient.delete(`/direct-chats/${chat.id}`);
+              triggerHaptic('success');
+              loadConversations();
+            } catch (err) {
+              Alert.alert('Error', err.response?.data?.message || 'Could not clear chat.');
+            }
+          },
+        },
+        {
+          text: 'Delete Conversation',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert('Delete Chat?', 'Remove this conversation from your chats?', [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Delete',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await apiClient.delete(`/direct-chats/${chat.id}`);
+                    setConversations((prev) => prev.filter((c) => c.id !== chat.id));
+                    triggerHaptic('success');
+                  } catch (err) {
+                    Alert.alert('Error', err.response?.data?.message || 'Could not delete chat.');
+                  }
+                },
+              },
+            ]);
+          },
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
   // Send message
   const handleSendMessage = async () => {
     if (!inputText.trim() || sendingMessage || !activeChat) return;
@@ -295,6 +475,11 @@ export default function DirectChatScreen({ onBack }) {
             setViewMode('inbox');
             loadConversations();
           }}
+          rightElement={
+            <TouchableOpacity onPress={handleOpenChatOptions} style={{ padding: 6 }}>
+              <Text style={{ fontSize: 20, color: theme.text }}>⋮</Text>
+            </TouchableOpacity>
+          }
         />
 
         <ScrollView
@@ -313,29 +498,41 @@ export default function DirectChatScreen({ onBack }) {
           ) : (
             messages.map((m) => {
               const isMe = m.senderId === user?.id;
+              const isUnsent = Boolean(m.isUnsent || m.isDeletedForEveryone);
               return (
-                <View
+                <TouchableOpacity
                   key={m.id}
+                  activeOpacity={0.85}
+                  onLongPress={() => handleMessageLongPress(m)}
                   style={[
                     styles.msgBubble,
                     isMe
                       ? [styles.userBubble, { backgroundColor: theme.primary }]
                       : [styles.otherBubble, { backgroundColor: theme.card, borderColor: theme.cardBorder }],
+                    isUnsent && { opacity: 0.75 },
                   ]}
                 >
-                  <Text style={[styles.msgText, { color: isMe ? '#FFF' : theme.text }]}>{m.content}</Text>
+                  <Text
+                    style={[
+                      styles.msgText,
+                      { color: isMe ? '#FFF' : theme.text },
+                      isUnsent && { fontStyle: 'italic' },
+                    ]}
+                  >
+                    {isUnsent ? '🚫 This message was deleted' : m.content}
+                  </Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 2, gap: 4 }}>
                     <Text style={[styles.msgTime, { color: isMe ? 'rgba(255,255,255,0.7)' : theme.textMuted }]}>
                       {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </Text>
-                    {isMe && (
+                    {isMe && !isUnsent && (
                       <MessageStatusTick
                         status={m.deliveryStatus || (m.receipts?.some((r) => r.userId !== user?.id && r.seenAt) ? 'SEEN' : 'SENT')}
                         size={13}
                       />
                     )}
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             })
           )}
@@ -486,6 +683,7 @@ export default function DirectChatScreen({ onBack }) {
                 key={chat.id}
                 activeOpacity={0.7}
                 onPress={() => handleOpenChat(chat)}
+                onLongPress={() => handleConversationLongPress(chat)}
                 style={[styles.convCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
               >
                 <View style={[styles.avatarCircle, { backgroundColor: `${theme.primary}25`, position: 'relative' }]}>

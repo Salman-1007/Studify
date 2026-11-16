@@ -281,6 +281,40 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
         loadAllChats();
       });
 
+      // Handle direct message unsent (delete for everyone)
+      socket.on('direct:message_unsent', ({ messageId, message }) => {
+        setRoomMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId
+              ? {
+                  ...m,
+                  isUnsent: true,
+                  isDeletedForEveryone: true,
+                  content: message?.content || 'This message was unsent',
+                }
+              : m
+          )
+        );
+        loadAllChats();
+      });
+
+      // Handle group message unsent (delete for everyone)
+      socket.on('group:message_unsent', ({ messageId, message }) => {
+        setRoomMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId
+              ? {
+                  ...m,
+                  isUnsent: true,
+                  isDeletedForEveryone: true,
+                  content: message?.content || 'This message was unsent',
+                }
+              : m
+          )
+        );
+        loadAllChats();
+      });
+
       return () => {
         socket.disconnect();
       };
@@ -484,6 +518,312 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
   };
 
   // ----------------------------------------------------
+  // Message Options: Delete for Me & Delete for Everyone
+  // ----------------------------------------------------
+  const handleMessageLongPress = (msg) => {
+    if (msg.isUnsent || msg.isDeletedForEveryone) return;
+    triggerHaptic('impactMedium');
+
+    const isMe = msg.senderId === user?.id || msg.sender?.id === user?.id;
+    const isDirect = activeRoom?.type === 'direct';
+    const targetId = activeRoom?.data?.id;
+
+    const options = [];
+
+    // Delete for Everyone (if sent by current user or user is admin)
+    if (isMe || user?.role === 'ADMIN') {
+      options.push({
+        text: 'Delete for everyone',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            triggerHaptic('warning');
+            if (isDirect) {
+              await apiClient.delete(`/direct-chats/messages/${msg.id}`);
+            } else {
+              await apiClient.delete(`/groups/messages/${msg.id}`);
+            }
+            // Optimistically update message in active view
+            setRoomMessages((prev) =>
+              prev.map((m) =>
+                m.id === msg.id
+                  ? { ...m, isUnsent: true, isDeletedForEveryone: true, content: 'This message was unsent' }
+                  : m
+              )
+            );
+            loadAllChats();
+          } catch (err) {
+            Alert.alert('Error', err.response?.data?.message || 'Could not delete message for everyone.');
+          }
+        },
+      });
+    }
+
+    // Delete for Me (always available)
+    options.push({
+      text: 'Delete for me',
+      style: 'destructive',
+      onPress: async () => {
+        try {
+          triggerHaptic('light');
+          if (isDirect) {
+            await apiClient.delete(`/direct-chats/${targetId}/messages/${msg.id}/for-me`);
+          } else {
+            await apiClient.delete(`/groups/${targetId}/messages/${msg.id}/for-me`);
+          }
+          // Remove from local room message array
+          setRoomMessages((prev) => prev.filter((m) => m.id !== msg.id));
+          loadAllChats();
+        } catch (err) {
+          Alert.alert('Error', err.response?.data?.message || 'Could not delete message for me.');
+        }
+      },
+    });
+
+    options.push({
+      text: 'Cancel',
+      style: 'cancel',
+    });
+
+    Alert.alert(
+      'Message Options',
+      'Choose an action for this message:',
+      options
+    );
+  };
+
+  // ----------------------------------------------------
+  // Chat Room Actions: Clear Chat, Delete Chat, Leave Group
+  // ----------------------------------------------------
+  const handleOpenRoomOptions = () => {
+    if (!activeRoom) return;
+    triggerHaptic('light');
+    const isDirect = activeRoom.type === 'direct';
+    const targetId = activeRoom.data.id;
+    const title = isDirect ? (activeRoom.partner?.displayName || 'Chat') : (activeRoom.data?.name || 'Group');
+
+    if (isDirect) {
+      Alert.alert(
+        title,
+        'Manage this direct conversation:',
+        [
+          {
+            text: 'Clear Chat',
+            style: 'destructive',
+            onPress: () => {
+              Alert.alert(
+                'Clear Chat?',
+                'Are you sure you want to clear all messages in this conversation?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Clear',
+                    style: 'destructive',
+                    onPress: async () => {
+                      try {
+                        await apiClient.delete(`/direct-chats/${targetId}`);
+                        setRoomMessages([]);
+                        triggerHaptic('success');
+                        loadAllChats();
+                      } catch (err) {
+                        Alert.alert('Error', err.response?.data?.message || 'Could not clear chat.');
+                      }
+                    },
+                  },
+                ]
+              );
+            },
+          },
+          {
+            text: 'Delete Chat',
+            style: 'destructive',
+            onPress: () => {
+              Alert.alert(
+                'Delete Chat?',
+                'This conversation will be deleted and removed from your chats list.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                      try {
+                        await apiClient.delete(`/direct-chats/${targetId}`);
+                        setActiveRoom(null);
+                        triggerHaptic('success');
+                        loadAllChats();
+                      } catch (err) {
+                        Alert.alert('Error', err.response?.data?.message || 'Could not delete chat.');
+                      }
+                    },
+                  },
+                ]
+              );
+            },
+          },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+    } else {
+      const isOwner = activeRoom.data?.ownerId === user?.id;
+      const options = [];
+
+      if (isOwner) {
+        options.push({
+          text: 'Delete Study Circle',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Delete Study Circle?',
+              'Are you sure you want to delete this study circle for all members?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete Circle',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      await apiClient.delete(`/groups/${targetId}`);
+                      setActiveRoom(null);
+                      triggerHaptic('success');
+                      loadAllChats();
+                    } catch (err) {
+                      Alert.alert('Error', err.response?.data?.message || 'Could not delete group.');
+                    }
+                  },
+                },
+              ]
+            );
+          },
+        });
+      } else {
+        options.push({
+          text: 'Leave Study Circle',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert(
+              'Leave Study Circle?',
+              'Are you sure you want to leave this circle?',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Leave',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      await apiClient.delete(`/groups/${targetId}/members/${user?.id}`);
+                      setActiveRoom(null);
+                      triggerHaptic('success');
+                      loadAllChats();
+                    } catch (err) {
+                      Alert.alert('Error', err.response?.data?.message || 'Could not leave circle.');
+                    }
+                  },
+                },
+              ]
+            );
+          },
+        });
+      }
+
+      options.push({ text: 'Cancel', style: 'cancel' });
+      Alert.alert(title, 'Study Circle Options:', options);
+    }
+  };
+
+  // ----------------------------------------------------
+  // Long Press Conversation Item in List
+  // ----------------------------------------------------
+  const handleConversationLongPress = (item, type) => {
+    triggerHaptic('impactMedium');
+    if (type === 'direct') {
+      const partner = getChatPartner(item, user?.id);
+      Alert.alert(
+        partner.displayName,
+        'Manage conversation:',
+        [
+          {
+            text: 'Clear Chat History',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                await apiClient.delete(`/direct-chats/${item.id}`);
+                triggerHaptic('success');
+                loadAllChats();
+              } catch (err) {
+                Alert.alert('Error', err.response?.data?.message || 'Could not clear chat.');
+              }
+            },
+          },
+          {
+            text: 'Delete Conversation',
+            style: 'destructive',
+            onPress: () => {
+              Alert.alert(
+                'Delete Chat?',
+                'Remove this conversation from your chat inbox?',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                      try {
+                        await apiClient.delete(`/direct-chats/${item.id}`);
+                        setDirectChats((prev) => prev.filter((c) => c.id !== item.id));
+                        triggerHaptic('success');
+                      } catch (err) {
+                        Alert.alert('Error', err.response?.data?.message || 'Could not delete chat.');
+                      }
+                    },
+                  },
+                ]
+              );
+            },
+          },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+    } else {
+      const isOwner = item.ownerId === user?.id;
+      Alert.alert(
+        item.name,
+        'Study Circle Options:',
+        [
+          isOwner
+            ? {
+                text: 'Delete Circle',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await apiClient.delete(`/groups/${item.id}`);
+                    setGroupChats((prev) => prev.filter((g) => g.id !== item.id));
+                    triggerHaptic('success');
+                  } catch (err) {
+                    Alert.alert('Error', err.response?.data?.message || 'Could not delete circle.');
+                  }
+                },
+              }
+            : {
+                text: 'Leave Circle',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await apiClient.delete(`/groups/${item.id}/members/${user?.id}`);
+                    setGroupChats((prev) => prev.filter((g) => g.id !== item.id));
+                    triggerHaptic('success');
+                  } catch (err) {
+                    Alert.alert('Error', err.response?.data?.message || 'Could not leave circle.');
+                  }
+                },
+              },
+          { text: 'Cancel', style: 'cancel' },
+        ]
+      );
+    }
+  };
+
+  // ----------------------------------------------------
   // Filtered Lists
   // ----------------------------------------------------
   const filteredDirect = directChats.filter((c) => {
@@ -548,6 +888,13 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
               {subtitle}
             </Text>
           </View>
+
+          <TouchableOpacity
+            style={styles.roomMoreBtn}
+            onPress={handleOpenRoomOptions}
+          >
+            <MoreVerticalIcon size={20} color="#FFFFFF" />
+          </TouchableOpacity>
         </View>
 
         {/* Message Thread */}
@@ -566,15 +913,19 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
             roomMessages.map((m) => {
               const isMe = m.senderId === user?.id || m.sender?.id === user?.id;
               const timeStr = new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              const isUnsent = Boolean(m.isUnsent || m.isDeletedForEveryone);
 
               return (
-                <View
+                <TouchableOpacity
                   key={m.id}
+                  activeOpacity={0.85}
+                  onLongPress={() => handleMessageLongPress(m)}
                   style={[
                     styles.waBubble,
                     isMe
                       ? [styles.waBubbleMe, { backgroundColor: theme.waSentBubble }]
                       : [styles.waBubbleOther, { backgroundColor: theme.waReceivedBubble, borderColor: theme.cardBorder }],
+                    isUnsent && { opacity: 0.75 },
                   ]}
                 >
                   {!isMe && !isDirect && (
@@ -582,14 +933,20 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
                       {m.sender?.username ? `@${m.sender.username}` : (m.sender?.name || 'Scholar')}
                     </Text>
                   )}
-                  <Text style={[styles.waMsgText, { color: isMe ? theme.waSentText : theme.waReceivedText }]}>
-                    {m.content}
+                  <Text
+                    style={[
+                      styles.waMsgText,
+                      { color: isMe ? theme.waSentText : theme.waReceivedText },
+                      isUnsent && { fontStyle: 'italic' },
+                    ]}
+                  >
+                    {isUnsent ? '🚫 This message was deleted' : m.content}
                   </Text>
                   <View style={styles.waTimeRow}>
                     <Text style={[styles.waTimeText, { color: isMe ? 'rgba(255,255,255,0.65)' : theme.textMuted }]}>
                       {timeStr}
                     </Text>
-                    {isMe && (
+                    {isMe && !isUnsent && (
                       <View style={{ marginLeft: 4 }}>
                         <MessageStatusTick
                           status={m.deliveryStatus || (m.receipts?.some((r) => r.userId !== user?.id && r.seenAt) ? 'SEEN' : 'SENT')}
@@ -598,7 +955,7 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
                       </View>
                     )}
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             })
           )}
@@ -791,6 +1148,7 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
                   key={chat.id}
                   activeOpacity={0.7}
                   onPress={() => handleOpenDirectRoom(chat)}
+                  onLongPress={() => handleConversationLongPress(chat, 'direct')}
                   style={[styles.waChatRow, { borderBottomColor: theme.cardBorder }]}
                 >
                   <View style={[styles.waAvatarBox, { backgroundColor: `${theme.primary}20` }]}>
@@ -859,6 +1217,7 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
                 key={grp.id}
                 activeOpacity={0.7}
                 onPress={() => handleOpenGroupRoom(grp)}
+                onLongPress={() => handleConversationLongPress(grp, 'group')}
                 style={[styles.waChatRow, { borderBottomColor: theme.cardBorder }]}
               >
                 <View style={[styles.waAvatarBox, { backgroundColor: `${theme.accentGold}20` }]}>
@@ -1298,6 +1657,10 @@ const styles = StyleSheet.create({
   roomBackBtn: {
     padding: 6,
     marginRight: 4,
+  },
+  roomMoreBtn: {
+    padding: 6,
+    marginLeft: 6,
   },
   roomAvatarCircle: {
     width: 38,
