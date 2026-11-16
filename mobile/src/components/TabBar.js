@@ -2,24 +2,33 @@ import React from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, Platform } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import { triggerHaptic } from '../utils/haptics';
+import {
+  HomeIcon,
+  ChatIcon,
+  TestsIcon,
+  HubIcon,
+  ClassroomsIcon,
+  SparklesIcon,
+  TrophyIcon,
+} from './Icons';
 
 export default function TabBar({ activeTab, onTabChange, isTeacher = false }) {
   const { theme } = useTheme();
 
   const studentTabs = [
-    { key: 'dashboard', label: 'Home', icon: '🏠' },
-    { key: 'arena', label: 'Arena', icon: '🔥' },
-    { key: 'tests', label: 'Tests', icon: '📝' },
-    { key: 'studyHub', label: 'Hub', icon: '💡' },
-    { key: 'classrooms', label: 'Classes', icon: '🏫' },
+    { key: 'dashboard', label: 'Home', IconComponent: HomeIcon },
+    { key: 'chats', label: 'Chats', IconComponent: ChatIcon },
+    { key: 'tests', label: 'Tests', IconComponent: TestsIcon },
+    { key: 'studyHub', label: 'Hub', IconComponent: HubIcon },
+    { key: 'classrooms', label: 'Classes', IconComponent: ClassroomsIcon },
   ];
 
   const teacherTabs = [
-    { key: 'teacherDashboard', label: 'Overview', icon: '📊' },
-    { key: 'teacherClassrooms', label: 'Classes', icon: '🏫' },
-    { key: 'noteToQuiz', label: 'Note→Quiz', icon: '✨' },
-    { key: 'analytics', label: 'Analytics', icon: '📈' },
-    { key: 'chat', label: 'Messages', icon: '💬' },
+    { key: 'teacherDashboard', label: 'Overview', IconComponent: HomeIcon },
+    { key: 'chats', label: 'Chats', IconComponent: ChatIcon },
+    { key: 'teacherClassrooms', label: 'Classes', IconComponent: ClassroomsIcon },
+    { key: 'noteToQuiz', label: 'Note→Quiz', IconComponent: SparklesIcon },
+    { key: 'analytics', label: 'Analytics', IconComponent: TrophyIcon },
   ];
 
   const tabs = isTeacher ? teacherTabs : studentTabs;
@@ -29,13 +38,16 @@ export default function TabBar({ activeTab, onTabChange, isTeacher = false }) {
       style={[
         styles.tabBar,
         {
-          backgroundColor: theme.card,
+          backgroundColor: theme.bgSecondary,
           borderTopColor: theme.cardBorder,
         },
       ]}
     >
       {tabs.map((tab) => {
         const isActive = activeTab === tab.key;
+        const IconComp = tab.IconComponent;
+        const iconColor = isActive ? theme.primary : theme.textMuted;
+
         return (
           <TouchableOpacity
             key={tab.key}
@@ -49,18 +61,16 @@ export default function TabBar({ activeTab, onTabChange, isTeacher = false }) {
             <View
               style={[
                 styles.iconContainer,
-                isActive && { backgroundColor: `${theme.primary}18` },
+                isActive && { backgroundColor: `${theme.primary}15` },
               ]}
             >
-              <Text style={[styles.tabIcon, isActive && styles.tabIconActive]}>
-                {tab.icon}
-              </Text>
+              <IconComp size={20} color={iconColor} strokeWidth={isActive ? 2.2 : 1.8} />
             </View>
             <Text
               style={[
                 styles.tabLabel,
-                { color: isActive ? theme.primary : theme.textMuted },
-                isActive && { fontWeight: '800' },
+                { color: isActive ? theme.text : theme.textMuted },
+                isActive && { fontWeight: '700' },
               ]}
             >
               {tab.label}
@@ -75,15 +85,11 @@ export default function TabBar({ activeTab, onTabChange, isTeacher = false }) {
 const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
-    height: Platform.OS === 'ios' ? 76 : 64,
-    paddingBottom: Platform.OS === 'ios' ? 20 : 6,
+    height: Platform.OS === 'ios' ? 76 : 62,
+    paddingBottom: Platform.OS === 'ios' ? 18 : 6,
     paddingTop: 6,
     borderTopWidth: 1,
     elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
   },
   tabItem: {
     flex: 1,
@@ -92,17 +98,12 @@ const styles = StyleSheet.create({
   },
   iconContainer: {
     paddingHorizontal: 12,
-    paddingVertical: 2,
-    borderRadius: 12,
-  },
-  tabIcon: {
-    fontSize: 18,
-  },
-  tabIconActive: {
-    transform: [{ scale: 1.08 }],
+    paddingVertical: 4,
+    borderRadius: 14,
   },
   tabLabel: {
-    fontSize: 11,
+    fontSize: 10,
     marginTop: 2,
+    letterSpacing: 0.2,
   },
 });

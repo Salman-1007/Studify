@@ -14,7 +14,7 @@ import Header from '../components/Header';
 import apiClient from '../api/client';
 import { triggerHaptic } from '../utils/haptics';
 
-export default function ProfileScreen() {
+export default function ProfileScreen({ onBack }) {
   const { user, isTeacher, logout } = useAuth();
   const { theme, themePreference, setThemePreference } = useTheme();
 
@@ -26,7 +26,7 @@ export default function ProfileScreen() {
       setTestingPush(true);
       triggerHaptic('medium');
       await apiClient.post('/notifications/test-push', {
-        title: 'Studify APK Push Verification 🚀',
+        title: 'Studify APK Push Verification',
         body: 'Push engine verified! Sideloaded APK receives notifications cleanly in foreground and background.',
       });
 
@@ -68,7 +68,12 @@ export default function ProfileScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
-      <Header title="Account Profile" subtitle="Settings & Appearance" />
+      <Header
+        title="Account Profile"
+        subtitle="Settings & Preferences"
+        showBack={Boolean(onBack)}
+        onBack={onBack}
+      />
 
       <ScrollView contentContainerStyle={styles.scroll}>
         {/* User Profile Card */}
@@ -124,7 +129,7 @@ export default function ProfileScreen() {
             {testingPush ? (
               <ActivityIndicator color="#FFF" size="small" />
             ) : (
-              <Text style={styles.pushTestBtnText}>📲 Send Live Test Push Notification</Text>
+              <Text style={styles.pushTestBtnText}>Send Live Test Push Notification</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -142,9 +147,9 @@ export default function ProfileScreen() {
           <Text style={[styles.cardTitle, { color: theme.text }]}>Appearance Mode</Text>
           <View style={styles.themeRow}>
             {[
-              { id: 'dark', label: 'Dark Mode', icon: '🌙' },
-              { id: 'light', label: 'Light Mode', icon: '☀️' },
-              { id: 'system', label: 'Auto System', icon: '⚙️' },
+              { id: 'dark', label: 'Dark Mode' },
+              { id: 'light', label: 'Light Mode' },
+              { id: 'system', label: 'System Default' },
             ].map((m) => {
               const isSelected = themePreference === m.id;
               return (

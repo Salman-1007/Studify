@@ -22,13 +22,13 @@ import TabBar from './src/components/TabBar';
 import LoginScreen from './src/screens/LoginScreen';
 import SignupScreen from './src/screens/SignupScreen';
 
-// Student Screens
+// Screens
 import DashboardScreen from './src/screens/DashboardScreen';
 import DailyArenaScreen from './src/screens/DailyArenaScreen';
 import StandardTestsScreen from './src/screens/StandardTestsScreen';
 import StudyHubScreen from './src/screens/StudyHubScreen';
 import ClassroomsScreen from './src/screens/ClassroomsScreen';
-import DirectChatScreen from './src/screens/DirectChatScreen';
+import WhatsAppChatsScreen from './src/screens/WhatsAppChatsScreen';
 import LeaderboardScreen from './src/screens/LeaderboardScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 
@@ -58,8 +58,12 @@ function AppContent() {
         console.log('[App] Push tapped with deep link payload:', data);
         if (data?.screen === 'DailyArena' || data?.type === 'DAILY_ARENA') {
           setActiveTab('arena');
-        } else if (data?.screen === 'ChatRoom' || data?.type === 'DIRECT_MESSAGE' || data?.type === 'CHAT_MESSAGE') {
-          setActiveTab('chat');
+        } else if (
+          data?.screen === 'ChatRoom' ||
+          data?.type === 'DIRECT_MESSAGE' ||
+          data?.type === 'CHAT_MESSAGE'
+        ) {
+          setActiveTab('chats');
         } else if (data?.screen === 'QuizRunner' || data?.type === 'NEW_QUIZ') {
           setActiveTab('tests');
         } else if (data?.screen === 'Classroom' || data?.type === 'ANNOUNCEMENT') {
@@ -124,6 +128,8 @@ function AppContent() {
               onNavigateTab={(tab) => setActiveTab(tab)}
             />
           );
+        case 'chats':
+          return <WhatsAppChatsScreen onBack={() => setActiveTab('teacherDashboard')} />;
         case 'teacherClassrooms':
           return <TeacherClassroomsScreen />;
         case 'noteToQuiz':
@@ -134,10 +140,8 @@ function AppContent() {
           );
         case 'analytics':
           return <ClassAnalyticsScreen />;
-        case 'chat':
-          return <DirectChatScreen onBack={() => setActiveTab('teacherDashboard')} />;
         case 'profile':
-          return <ProfileScreen />;
+          return <ProfileScreen onBack={() => setActiveTab('teacherDashboard')} />;
         default:
           return <TeacherDashboardScreen onNavigateTab={(tab) => setActiveTab(tab)} />;
       }
@@ -165,32 +169,32 @@ function AppContent() {
               setActiveTab('studyHub');
             }}
             onOpenStudyGroups={() => {
-              setHubSection('groups');
-              setActiveTab('studyHub');
+              setActiveTab('chats');
             }}
             onOpenClassrooms={() => setActiveTab('classrooms')}
             onOpenLeaderboard={() => setActiveTab('leaderboard')}
             onOpenProfile={() => setActiveTab('profile')}
           />
         );
+      case 'chats':
+      case 'chat':
+        return <WhatsAppChatsScreen onBack={() => setActiveTab('dashboard')} />;
       case 'arena':
-        return <DailyArenaScreen />;
+        return <DailyArenaScreen onBack={() => setActiveTab('dashboard')} />;
       case 'tests':
-        return <StandardTestsScreen />;
+        return <StandardTestsScreen onBack={() => setActiveTab('dashboard')} />;
       case 'studyHub':
         return <StudyHubScreen initialSection={hubSection} />;
       case 'classrooms':
         return (
           <ClassroomsScreen
-            onOpenChat={() => setActiveTab('chat')}
+            onOpenChat={() => setActiveTab('chats')}
           />
         );
-      case 'chat':
-        return <DirectChatScreen onBack={() => setActiveTab('dashboard')} />;
       case 'leaderboard':
         return <LeaderboardScreen onBack={() => setActiveTab('dashboard')} />;
       case 'profile':
-        return <ProfileScreen />;
+        return <ProfileScreen onBack={() => setActiveTab('dashboard')} />;
       default:
         return <DashboardScreen onEnterArena={() => setActiveTab('arena')} />;
     }

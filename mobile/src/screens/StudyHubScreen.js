@@ -9,6 +9,12 @@ import {
 import { useTheme } from '../context/ThemeContext';
 import Header from '../components/Header';
 import { triggerHaptic } from '../utils/haptics';
+import {
+  SparklesIcon,
+  DocumentIcon,
+  HubIcon,
+  UsersIcon,
+} from '../components/Icons';
 
 import MentorScreen from './MentorScreen';
 import MaterialsScreen from './MaterialsScreen';
@@ -40,7 +46,7 @@ export default function StudyHubScreen({ initialSection = null }) {
   const sections = [
     {
       id: 'mentor',
-      icon: '🤖',
+      IconComp: SparklesIcon,
       title: '24/7 AI Study Mentor',
       subtitle: 'Ask conceptual questions, solve formulas, and clarify Pakistani board topics.',
       badge: 'Curriculum AI',
@@ -48,7 +54,7 @@ export default function StudyHubScreen({ initialSection = null }) {
     },
     {
       id: 'materials',
-      icon: '📄',
+      IconComp: DocumentIcon,
       title: 'Study Materials & Notes',
       subtitle: 'Upload lecture slides or PDFs. AI auto-generates summaries, flashcards & tests.',
       badge: 'Document AI',
@@ -56,7 +62,7 @@ export default function StudyHubScreen({ initialSection = null }) {
     },
     {
       id: 'flashcards',
-      icon: '🗂️',
+      IconComp: HubIcon,
       title: 'Spaced Repetition Flashcards',
       subtitle: 'Study with 3D flip cards and active recall intervals (1d, 3d, 7d).',
       badge: 'Active Recall',
@@ -64,7 +70,7 @@ export default function StudyHubScreen({ initialSection = null }) {
     },
     {
       id: 'groups',
-      icon: '👥',
+      IconComp: UsersIcon,
       title: 'Collaborative Study Circles',
       subtitle: 'Join peer groups, discuss board exam problems, and challenge friends to quiz battles.',
       badge: 'Peer Learning',
@@ -83,33 +89,36 @@ export default function StudyHubScreen({ initialSection = null }) {
         <Text style={[styles.sectionHeading, { color: theme.text }]}>Intelligent Learning Tools</Text>
 
         <View style={styles.grid}>
-          {sections.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              activeOpacity={0.8}
-              onPress={() => {
-                triggerHaptic('medium');
-                setActiveSection(item.id);
-              }}
-              style={[styles.card, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
-            >
-              <View style={styles.cardHeader}>
-                <View style={[styles.iconBox, { backgroundColor: `${item.color}20` }]}>
-                  <Text style={styles.icon}>{item.icon}</Text>
+          {sections.map((item) => {
+            const IconComp = item.IconComp;
+            return (
+              <TouchableOpacity
+                key={item.id}
+                activeOpacity={0.8}
+                onPress={() => {
+                  triggerHaptic('medium');
+                  setActiveSection(item.id);
+                }}
+                style={[styles.card, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
+              >
+                <View style={styles.cardHeader}>
+                  <View style={[styles.iconBox, { backgroundColor: `${item.color}18` }]}>
+                    <IconComp size={22} color={item.color} />
+                  </View>
+                  <View style={[styles.badge, { backgroundColor: `${item.color}15` }]}>
+                    <Text style={[styles.badgeText, { color: item.color }]}>{item.badge}</Text>
+                  </View>
                 </View>
-                <View style={[styles.badge, { backgroundColor: `${item.color}15` }]}>
-                  <Text style={[styles.badgeText, { color: item.color }]}>{item.badge}</Text>
+
+                <Text style={[styles.cardTitle, { color: theme.text }]}>{item.title}</Text>
+                <Text style={[styles.cardSub, { color: theme.textMuted }]}>{item.subtitle}</Text>
+
+                <View style={styles.cardFooter}>
+                  <Text style={[styles.actionText, { color: item.color }]}>Open Tool →</Text>
                 </View>
-              </View>
-
-              <Text style={[styles.cardTitle, { color: theme.text }]}>{item.title}</Text>
-              <Text style={[styles.cardSub, { color: theme.textMuted }]}>{item.subtitle}</Text>
-
-              <View style={styles.cardFooter}>
-                <Text style={[styles.actionText, { color: item.color }]}>Open Tool →</Text>
-              </View>
-            </TouchableOpacity>
-          ))}
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </ScrollView>
     </View>
@@ -145,14 +154,11 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   iconBox: {
-    width: 46,
-    height: 46,
-    borderRadius: 14,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  icon: {
-    fontSize: 24,
   },
   badge: {
     paddingHorizontal: 10,

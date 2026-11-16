@@ -13,6 +13,16 @@ import { useTheme } from '../context/ThemeContext';
 import Header from '../components/Header';
 import apiClient from '../api/client';
 import { triggerHaptic } from '../utils/haptics';
+import {
+  FlameIcon,
+  TestsIcon,
+  SparklesIcon,
+  DocumentIcon,
+  UsersIcon,
+  ClassroomsIcon,
+  TrophyIcon,
+  HubIcon,
+} from '../components/Icons';
 
 export default function DashboardScreen({
   onEnterArena,
@@ -82,7 +92,8 @@ export default function DashboardScreen({
   const formatCountdown = (secs) => {
     const h = Math.floor(secs / 3600);
     const m = Math.floor((secs % 3600) / 60);
-    return `${h}h ${m}m left`;
+    const s = secs % 60;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
   const onRefresh = () => {
@@ -97,7 +108,8 @@ export default function DashboardScreen({
   const quickActions = [
     {
       id: 'arena',
-      icon: '🔥',
+      IconComp: FlameIcon,
+      iconColor: theme.accent,
       title: 'Daily Arena',
       sub: '15 Timed Questions',
       badge: '+50 XP',
@@ -105,55 +117,62 @@ export default function DashboardScreen({
     },
     {
       id: 'tests',
-      icon: '🩺',
-      title: 'Entry Tests',
+      IconComp: TestsIcon,
+      iconColor: theme.primary,
+      title: 'Entrance Exams',
       sub: 'MDCAT & ECAT Mocks',
       badge: 'Full Exam',
       onPress: onOpenStandardTests,
     },
     {
       id: 'mentor',
-      icon: '🤖',
-      title: 'AI Mentor',
+      IconComp: SparklesIcon,
+      iconColor: theme.waTeal,
+      title: 'AI Study Mentor',
       sub: '24/7 Curriculum Tutor',
       badge: 'FBISE/PTB',
       onPress: onOpenMentor,
     },
     {
       id: 'materials',
-      icon: '📄',
+      IconComp: DocumentIcon,
+      iconColor: theme.accentGold,
       title: 'Materials & Notes',
-      sub: 'PDF Upload & AI Docs',
-      badge: 'AI Summary',
+      sub: 'PDF Upload & AI Summary',
+      badge: 'Document AI',
       onPress: onOpenMaterials,
     },
     {
       id: 'flashcards',
-      icon: '🗂️',
+      IconComp: HubIcon,
+      iconColor: theme.success,
       title: 'Flashcards',
-      sub: 'Spaced Repetition',
+      sub: 'Spaced Repetition SRS',
       badge: 'Active Recall',
       onPress: onOpenFlashcards,
     },
     {
       id: 'groups',
-      icon: '👥',
+      IconComp: UsersIcon,
+      iconColor: theme.accent,
       title: 'Study Circles',
-      sub: 'Collaborate & Chat',
-      badge: 'Peer Study',
+      sub: 'Peer Discussions',
+      badge: 'Collaborate',
       onPress: onOpenStudyGroups,
     },
     {
       id: 'classrooms',
-      icon: '🏫',
+      IconComp: ClassroomsIcon,
+      iconColor: theme.primary,
       title: 'Classrooms',
       sub: 'Teacher Assignments',
-      badge: 'Join Class',
+      badge: 'Enrolled',
       onPress: onOpenClassrooms,
     },
     {
       id: 'leaderboard',
-      icon: '🏆',
+      IconComp: TrophyIcon,
+      iconColor: theme.accentGold,
       title: 'Leaderboard',
       sub: 'National Standings',
       badge: 'Top Ranks',
@@ -167,14 +186,22 @@ export default function DashboardScreen({
         title="Studify"
         subtitle={`Welcome, ${user?.name ? user.name.split(' ')[0] : 'Scholar'}`}
         rightElement={
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={onOpenProfile}
-            style={[styles.streakBadge, { backgroundColor: `${theme.accent}18` }]}
-          >
-            <Text style={styles.streakFire}>🔥</Text>
-            <Text style={[styles.streakCount, { color: theme.accent }]}>{streak}d</Text>
-          </TouchableOpacity>
+          <View style={styles.headerRightBox}>
+            <View style={[styles.streakPill, { backgroundColor: `${theme.accent}15` }]}>
+              <FlameIcon size={16} color={theme.accent} />
+              <Text style={[styles.streakCountText, { color: theme.accent }]}>{streak}d</Text>
+            </View>
+
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={onOpenProfile}
+              style={[styles.profileAvatarBtn, { backgroundColor: `${theme.primary}20` }]}
+            >
+              <Text style={[styles.profileAvatarInitial, { color: theme.primary }]}>
+                {user?.name ? user.name.charAt(0).toUpperCase() : 'S'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         }
       />
 
@@ -189,32 +216,37 @@ export default function DashboardScreen({
           />
         }
       >
-        {/* Daily Arena Hero Card */}
-        <View style={[styles.arenaCard, { backgroundColor: theme.card, borderColor: `${theme.accent}40` }]}>
-          <View style={styles.badgeRow}>
-            <View style={[styles.liveTag, { backgroundColor: `${theme.accent}20` }]}>
-              <Text style={[styles.liveText, { color: theme.accent }]}>🔥 DAILY ARENA</Text>
+        {/* ==================================================== */}
+        {/* DAILY ARENA HERO CARD (ON HOME PAGE)                  */}
+        {/* ==================================================== */}
+        <View style={[styles.arenaCard, { backgroundColor: theme.card, borderColor: `${theme.accent}30` }]}>
+          <View style={styles.arenaHeaderRow}>
+            <View style={styles.arenaTagRow}>
+              <FlameIcon size={16} color={theme.accent} />
+              <Text style={[styles.arenaTagName, { color: theme.accent }]}>DAILY ARENA</Text>
             </View>
-            <Text style={[styles.bonusTag, { color: theme.accentGold }]}>+50 XP BONUS</Text>
+            <View style={[styles.bonusPill, { backgroundColor: `${theme.accentGold}18` }]}>
+              <Text style={[styles.bonusPillText, { color: theme.accentGold }]}>+50 XP BONUS</Text>
+            </View>
           </View>
 
           <Text style={[styles.arenaTitle, { color: theme.text }]}>Today's Curriculum Challenge</Text>
-          <Text style={[styles.arenaDesc, { color: theme.textSecondary }]}>
-            Complete today's 15-question challenge matched to your board curriculum. Maintain your daily streak!
+          <Text style={[styles.arenaSub, { color: theme.textSecondary }]}>
+            15 rapid-fire questions calibrated to your syllabus. Maintain your daily study streak!
           </Text>
 
           {loading ? (
             <ActivityIndicator color={theme.primary} style={{ marginVertical: 14 }} />
           ) : (
-            <View style={[styles.arenaMetrics, { backgroundColor: theme.cardHover }]}>
-              <View style={styles.metricItem}>
-                <Text style={[styles.metricLabel, { color: theme.textMuted }]}>Current Streak</Text>
-                <Text style={[styles.metricValue, { color: theme.accent }]}>{streak} Days</Text>
+            <View style={[styles.arenaStatsRow, { backgroundColor: theme.cardHover }]}>
+              <View style={styles.arenaStatCol}>
+                <Text style={[styles.arenaStatLabel, { color: theme.textMuted }]}>ACTIVE STREAK</Text>
+                <Text style={[styles.arenaStatVal, { color: theme.accent }]}>{streak} Days</Text>
               </View>
-              <View style={styles.metricDivider} />
-              <View style={styles.metricItem}>
-                <Text style={[styles.metricLabel, { color: theme.textMuted }]}>Resets In</Text>
-                <Text style={[styles.metricValue, { color: theme.accentGold }]}>
+              <View style={[styles.arenaStatDivider, { backgroundColor: theme.cardBorder }]} />
+              <View style={styles.arenaStatCol}>
+                <Text style={[styles.arenaStatLabel, { color: theme.textMuted }]}>RESETS IN</Text>
+                <Text style={[styles.arenaStatVal, { color: theme.accentGold }]}>
                   {formatCountdown(countdown)}
                 </Text>
               </View>
@@ -222,75 +254,73 @@ export default function DashboardScreen({
           )}
 
           <TouchableOpacity
-            style={[styles.arenaButton, { backgroundColor: theme.primary }]}
+            style={[styles.arenaActionBtn, { backgroundColor: theme.primary }]}
             activeOpacity={0.8}
             onPress={() => {
               triggerHaptic('medium');
               if (onEnterArena) onEnterArena();
             }}
           >
-            <Text style={styles.arenaButtonText}>
-              {arenaStatus?.hasCompletedToday ? 'Review Daily Challenge →' : 'Enter Daily Arena →'}
+            <Text style={styles.arenaActionBtnText}>
+              {arenaStatus?.hasCompletedToday ? 'Review Daily Challenge Results →' : 'Enter Daily Challenge →'}
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Quick Stats Grid */}
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>Academic Overview</Text>
-        <View style={styles.statsRow}>
-          <View style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-            <Text style={styles.statIcon}>⚡</Text>
-            <Text style={[styles.statValue, { color: theme.text }]}>{points}</Text>
-            <Text style={[styles.statTitle, { color: theme.textMuted }]}>Total XP</Text>
+        {/* Academic Overview KPIs */}
+        <Text style={[styles.sectionHeading, { color: theme.text }]}>Academic Standing</Text>
+        <View style={styles.kpiRow}>
+          <View style={[styles.kpiCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+            <Text style={[styles.kpiValue, { color: theme.text }]}>{points}</Text>
+            <Text style={[styles.kpiLabel, { color: theme.textMuted }]}>Total XP</Text>
           </View>
-          <View style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-            <Text style={styles.statIcon}>🏛️</Text>
-            <Text style={[styles.statValue, { color: theme.text }]}>
-              {user?.board || 'FBISE'}
-            </Text>
-            <Text style={[styles.statTitle, { color: theme.textMuted }]}>Board</Text>
+          <View style={[styles.kpiCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+            <Text style={[styles.kpiValue, { color: theme.text }]}>{user?.board || 'Punjab'}</Text>
+            <Text style={[styles.kpiLabel, { color: theme.textMuted }]}>Board</Text>
           </View>
-          <View style={[styles.statCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-            <Text style={styles.statIcon}>🎓</Text>
-            <Text style={[styles.statValue, { color: theme.text }]}>
-              {user?.grade ? `Class ${user.grade}` : 'MDCAT'}
-            </Text>
-            <Text style={[styles.statTitle, { color: theme.textMuted }]}>Curriculum</Text>
+          <View style={[styles.kpiCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+            <Text style={[styles.kpiValue, { color: theme.text }]}>{user?.grade ? `Class ${user.grade}` : 'MDCAT'}</Text>
+            <Text style={[styles.kpiLabel, { color: theme.textMuted }]}>Curriculum</Text>
           </View>
         </View>
 
-        {/* Quick Action Hub (8 Grid Cards) */}
-        <Text style={[styles.sectionTitle, { color: theme.text, marginTop: 24 }]}>Study Ecosystem</Text>
-        <View style={styles.actionGrid}>
-          {quickActions.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              activeOpacity={0.7}
-              onPress={() => {
-                triggerHaptic('light');
-                if (item.onPress) item.onPress();
-              }}
-              style={[styles.actionCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
-            >
-              <View style={styles.actionCardHeader}>
-                <Text style={styles.actionIcon}>{item.icon}</Text>
-                <View style={[styles.actionBadge, { backgroundColor: `${theme.primary}18` }]}>
-                  <Text style={[styles.actionBadgeText, { color: theme.primary }]}>{item.badge}</Text>
+        {/* 8-Tile Quick Action Grid */}
+        <Text style={[styles.sectionHeading, { color: theme.text, marginTop: 20 }]}>Study Ecosystem</Text>
+        <View style={styles.grid}>
+          {quickActions.map((item) => {
+            const IconComp = item.IconComp;
+            return (
+              <TouchableOpacity
+                key={item.id}
+                activeOpacity={0.75}
+                onPress={() => {
+                  triggerHaptic('light');
+                  if (item.onPress) item.onPress();
+                }}
+                style={[styles.gridCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
+              >
+                <View style={styles.gridCardTop}>
+                  <View style={[styles.iconBox, { backgroundColor: `${item.iconColor}18` }]}>
+                    <IconComp size={18} color={item.iconColor} />
+                  </View>
+                  <View style={[styles.badgePill, { backgroundColor: `${item.iconColor}15` }]}>
+                    <Text style={[styles.badgePillText, { color: item.iconColor }]}>{item.badge}</Text>
+                  </View>
                 </View>
-              </View>
-              <Text style={[styles.actionTitle, { color: theme.text }]}>{item.title}</Text>
-              <Text style={[styles.actionSub, { color: theme.textMuted }]}>{item.sub}</Text>
-            </TouchableOpacity>
-          ))}
+                <Text style={[styles.gridTitle, { color: theme.text }]}>{item.title}</Text>
+                <Text style={[styles.gridSub, { color: theme.textMuted }]}>{item.sub}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
-        {/* Recent Test History */}
+        {/* Recent Performance History */}
         {recentTests.length > 0 && (
-          <View style={{ marginTop: 24 }}>
-            <View style={styles.recentHeaderRow}>
-              <Text style={[styles.sectionTitle, { color: theme.text, marginBottom: 0 }]}>Recent Tests</Text>
+          <View style={{ marginTop: 22 }}>
+            <View style={styles.recentSectionHeader}>
+              <Text style={[styles.sectionHeading, { color: theme.text, marginBottom: 0 }]}>Recent Tests</Text>
               <TouchableOpacity onPress={onOpenStandardTests}>
-                <Text style={[styles.viewAllLink, { color: theme.primary }]}>View All →</Text>
+                <Text style={[styles.viewAllText, { color: theme.primary }]}>View All →</Text>
               </TouchableOpacity>
             </View>
 
@@ -298,19 +328,19 @@ export default function DashboardScreen({
               {recentTests.map((t) => (
                 <View
                   key={t.id}
-                  style={[styles.recentCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
+                  style={[styles.recentItemCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
                 >
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.recentTitle, { color: theme.text }]}>
+                    <Text style={[styles.recentItemTitle, { color: theme.text }]}>
                       {t.subject?.name || t.track || 'Mock Test'}
                     </Text>
-                    <Text style={[styles.recentMeta, { color: theme.textMuted }]}>
+                    <Text style={[styles.recentItemMeta, { color: theme.textMuted }]}>
                       Score: {t.score}/{t.totalQuestions} • {new Date(t.createdAt).toLocaleDateString()}
                     </Text>
                   </View>
                   <View
                     style={[
-                      styles.recentScoreBadge,
+                      styles.scoreBadgePill,
                       { backgroundColor: t.percentage >= 60 ? `${theme.success}18` : `${theme.error}18` },
                     ]}
                   >
@@ -318,7 +348,7 @@ export default function DashboardScreen({
                       style={{
                         color: t.percentage >= 60 ? theme.success : theme.error,
                         fontWeight: '800',
-                        fontSize: 13,
+                        fontSize: 12,
                       }}
                     >
                       {t.percentage}%
@@ -342,191 +372,222 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 40,
   },
-  streakBadge: {
+  headerRightBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 16,
+    gap: 8,
   },
-  streakFire: {
-    fontSize: 14,
-    marginRight: 4,
-  },
-  streakCount: {
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  arenaCard: {
-    borderRadius: 20,
-    padding: 20,
-    borderWidth: 1.5,
-    marginBottom: 20,
-  },
-  badgeRow: {
+  streakPill: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
-  },
-  liveTag: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 10,
+    borderRadius: 14,
+    gap: 4,
   },
-  liveText: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  bonusTag: {
+  streakCountText: {
     fontSize: 12,
     fontWeight: '800',
   },
-  arenaTitle: {
-    fontSize: 19,
-    fontWeight: '800',
-    marginBottom: 4,
-  },
-  arenaDesc: {
-    fontSize: 13,
-    lineHeight: 18,
-    marginBottom: 14,
-  },
-  arenaMetrics: {
-    flexDirection: 'row',
+  profileAvatarBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 12,
-    marginBottom: 14,
+    justifyContent: 'center',
   },
-  metricItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  metricLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  metricValue: {
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  metricDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-  },
-  arenaButton: {
-    paddingVertical: 13,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  arenaButtonText: {
-    color: '#FFF',
+  profileAvatarInitial: {
     fontSize: 14,
-    fontWeight: '700',
-  },
-  sectionTitle: {
-    fontSize: 16,
     fontWeight: '800',
-    marginBottom: 12,
-    letterSpacing: -0.3,
   },
-  statsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 10,
-  },
-  statCard: {
-    flex: 1,
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 16,
+
+  // Daily Arena Hero Card
+  arenaCard: {
+    borderRadius: 18,
+    padding: 18,
     borderWidth: 1,
+    marginBottom: 20,
   },
-  statIcon: {
-    fontSize: 20,
-    marginBottom: 6,
-  },
-  statValue: {
-    fontSize: 15,
-    fontWeight: '800',
-    marginBottom: 2,
-  },
-  statTitle: {
-    fontSize: 11,
-  },
-  actionGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  actionCard: {
-    width: '48.5%',
-    padding: 14,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-  actionCardHeader: {
+  arenaHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
   },
-  actionIcon: {
-    fontSize: 22,
+  arenaTagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
-  actionBadge: {
+  arenaTagName: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  bonusPill: {
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 8,
   },
-  actionBadgeText: {
+  bonusPillText: {
     fontSize: 10,
     fontWeight: '800',
+    letterSpacing: 0.3,
   },
-  actionTitle: {
-    fontSize: 14,
+  arenaTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  arenaSub: {
+    fontSize: 12,
+    lineHeight: 17,
+    marginBottom: 12,
+  },
+  arenaStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  arenaStatCol: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  arenaStatLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  arenaStatVal: {
+    fontSize: 15,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  arenaStatDivider: {
+    width: 1,
+    height: 20,
+  },
+  arenaActionBtn: {
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  arenaActionBtnText: {
+    color: '#FFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  // KPIs
+  sectionHeading: {
+    fontSize: 15,
+    fontWeight: '800',
+    marginBottom: 10,
+    letterSpacing: -0.2,
+  },
+  kpiRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+  kpiCard: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  kpiValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 2,
+  },
+  kpiLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+
+  // 8-Tile Grid
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  gridCard: {
+    width: '48.5%',
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  gridCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  iconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgePill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  badgePillText: {
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  gridTitle: {
+    fontSize: 13,
     fontWeight: '700',
     marginBottom: 2,
   },
-  actionSub: {
+  gridSub: {
     fontSize: 11,
-    lineHeight: 15,
+    lineHeight: 14,
   },
-  recentHeaderRow: {
+
+  // Recent History
+  recentSectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 10,
   },
-  viewAllLink: {
+  viewAllText: {
     fontSize: 12,
     fontWeight: '700',
   },
   recentList: {
     gap: 8,
   },
-  recentCard: {
+  recentItemCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 14,
-    borderRadius: 14,
+    padding: 12,
+    borderRadius: 12,
     borderWidth: 1,
   },
-  recentTitle: {
-    fontSize: 14,
+  recentItemTitle: {
+    fontSize: 13,
     fontWeight: '700',
     marginBottom: 2,
   },
-  recentMeta: {
+  recentItemMeta: {
     fontSize: 11,
   },
-  recentScoreBadge: {
-    paddingHorizontal: 10,
+  scoreBadgePill: {
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
   },

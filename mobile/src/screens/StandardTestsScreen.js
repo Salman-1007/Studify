@@ -13,6 +13,13 @@ import { useTheme } from '../context/ThemeContext';
 import Header from '../components/Header';
 import apiClient from '../api/client';
 import { triggerHaptic } from '../utils/haptics';
+import {
+  TestsIcon,
+  ClassroomsIcon,
+  DocumentIcon,
+  HubIcon,
+  ClockIcon,
+} from '../components/Icons';
 
 export default function StandardTestsScreen({ onBack }) {
   const { theme } = useTheme();
@@ -59,7 +66,8 @@ export default function StandardTestsScreen({ onBack }) {
       id: 'MDCAT',
       name: 'PMDC MDCAT',
       badge: 'National Medical',
-      icon: '🩺',
+      IconComp: TestsIcon,
+      color: theme.primary,
       description: 'Biology, Chemistry, Physics, English & Logical Reasoning',
       defaultGrade: '12',
     },
@@ -67,23 +75,26 @@ export default function StandardTestsScreen({ onBack }) {
       id: 'ECAT',
       name: 'UET ECAT',
       badge: 'National Engineering',
-      icon: '📐',
+      IconComp: HubIcon,
+      color: theme.accent,
       description: 'Mathematics, Physics, Chemistry & English',
       defaultGrade: '12',
     },
     {
       id: 'FBISE',
       name: 'Federal Board (FBISE)',
-      badge: 'Islamabad / Overseas',
-      icon: '🏛️',
+      badge: 'Federal Islamabad',
+      IconComp: ClassroomsIcon,
+      color: theme.success,
       description: 'Class 9, 10, 11 (HSSC-I) & Class 12 (HSSC-II)',
       defaultGrade: '9',
     },
     {
       id: 'PTB',
       name: 'Punjab Board (PTB)',
-      badge: 'Lahore / Rawalpindi / Multan',
-      icon: '🌾',
+      badge: 'Punjab Text Book',
+      IconComp: DocumentIcon,
+      color: theme.accentGold,
       description: 'Matric & Intermediate Science Curriculums',
       defaultGrade: '9',
     },
@@ -306,8 +317,8 @@ export default function StandardTestsScreen({ onBack }) {
           </TouchableOpacity>
 
           <View style={styles.timerBadge}>
-            <Text style={styles.timerIcon}>⏱️</Text>
-            <Text style={[styles.timerText, { color: timeRemaining < 120 ? theme.error : theme.accentGold }]}>
+            <ClockIcon size={16} color={timeRemaining < 120 ? theme.error : theme.accentGold} />
+            <Text style={[styles.timerText, { color: timeRemaining < 120 ? theme.error : theme.accentGold, marginLeft: 6 }]}>
               {formatTime(timeRemaining)}
             </Text>
           </View>
@@ -570,7 +581,9 @@ export default function StandardTestsScreen({ onBack }) {
             <ActivityIndicator color={theme.primary} style={{ marginTop: 40 }} />
           ) : historyList.length === 0 ? (
             <View style={[styles.emptyCard, { backgroundColor: theme.card }]}>
-              <Text style={{ fontSize: 32, marginBottom: 12 }}>📝</Text>
+              <View style={{ marginBottom: 12 }}>
+                <TestsIcon size={36} color={theme.textMuted} />
+              </View>
               <Text style={[styles.emptyHeadline, { color: theme.text }]}>No Past Exam Attempts</Text>
               <Text style={[styles.emptyText, { color: theme.textMuted }]}>
                 Complete full-length MDCAT, ECAT, or FBISE/PTB papers to track your long-term score trends.
@@ -617,7 +630,9 @@ export default function StandardTestsScreen({ onBack }) {
         <ScrollView contentContainerStyle={styles.scroll}>
           {/* Track Summary Banner */}
           <View style={[styles.configBanner, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-            <Text style={{ fontSize: 28, marginBottom: 8 }}>{selectedTrack.icon}</Text>
+            <View style={[styles.iconBox, { backgroundColor: `${selectedTrack.color}18`, marginBottom: 10 }]}>
+              <selectedTrack.IconComp size={30} color={selectedTrack.color} />
+            </View>
             <Text style={[styles.configTrackName, { color: theme.text }]}>{selectedTrack.name}</Text>
             <Text style={[styles.configTrackDesc, { color: theme.textMuted }]}>{selectedTrack.description}</Text>
           </View>
@@ -784,44 +799,54 @@ export default function StandardTestsScreen({ onBack }) {
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={[styles.sectionHeading, { color: theme.text }]}>National Entrance Tests</Text>
         <View style={styles.tracksGrid}>
-          {examTracks.slice(0, 2).map((track) => (
-            <TouchableOpacity
-              key={track.id}
-              activeOpacity={0.7}
-              onPress={() => handleSelectTrack(track)}
-              style={[styles.trackCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
-            >
-              <View style={styles.trackCardHeader}>
-                <Text style={styles.trackIcon}>{track.icon}</Text>
-                <View style={[styles.trackBadge, { backgroundColor: `${theme.primary}20` }]}>
-                  <Text style={[styles.trackBadgeText, { color: theme.primary }]}>{track.badge}</Text>
+          {examTracks.slice(0, 2).map((track) => {
+            const IconComp = track.IconComp;
+            return (
+              <TouchableOpacity
+                key={track.id}
+                activeOpacity={0.7}
+                onPress={() => handleSelectTrack(track)}
+                style={[styles.trackCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
+              >
+                <View style={styles.trackCardHeader}>
+                  <View style={[styles.trackIconBox, { backgroundColor: `${track.color}18` }]}>
+                    <IconComp size={22} color={track.color} />
+                  </View>
+                  <View style={[styles.trackBadge, { backgroundColor: `${track.color}15` }]}>
+                    <Text style={[styles.trackBadgeText, { color: track.color }]}>{track.badge}</Text>
+                  </View>
                 </View>
-              </View>
-              <Text style={[styles.trackName, { color: theme.text }]}>{track.name}</Text>
-              <Text style={[styles.trackDesc, { color: theme.textMuted }]}>{track.description}</Text>
-            </TouchableOpacity>
-          ))}
+                <Text style={[styles.trackName, { color: theme.text }]}>{track.name}</Text>
+                <Text style={[styles.trackDesc, { color: theme.textMuted }]}>{track.description}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         <Text style={[styles.sectionHeading, { color: theme.text }]}>Provincial & Federal Boards</Text>
         <View style={styles.tracksGrid}>
-          {examTracks.slice(2, 4).map((track) => (
-            <TouchableOpacity
-              key={track.id}
-              activeOpacity={0.7}
-              onPress={() => handleSelectTrack(track)}
-              style={[styles.trackCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
-            >
-              <View style={styles.trackCardHeader}>
-                <Text style={styles.trackIcon}>{track.icon}</Text>
-                <View style={[styles.trackBadge, { backgroundColor: `${theme.accent}20` }]}>
-                  <Text style={[styles.trackBadgeText, { color: theme.accent }]}>{track.badge}</Text>
+          {examTracks.slice(2, 4).map((track) => {
+            const IconComp = track.IconComp;
+            return (
+              <TouchableOpacity
+                key={track.id}
+                activeOpacity={0.7}
+                onPress={() => handleSelectTrack(track)}
+                style={[styles.trackCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
+              >
+                <View style={styles.trackCardHeader}>
+                  <View style={[styles.trackIconBox, { backgroundColor: `${track.color}18` }]}>
+                    <IconComp size={22} color={track.color} />
+                  </View>
+                  <View style={[styles.trackBadge, { backgroundColor: `${track.color}15` }]}>
+                    <Text style={[styles.trackBadgeText, { color: track.color }]}>{track.badge}</Text>
+                  </View>
                 </View>
-              </View>
-              <Text style={[styles.trackName, { color: theme.text }]}>{track.name}</Text>
-              <Text style={[styles.trackDesc, { color: theme.textMuted }]}>{track.description}</Text>
-            </TouchableOpacity>
-          ))}
+                <Text style={[styles.trackName, { color: theme.text }]}>{track.name}</Text>
+                <Text style={[styles.trackDesc, { color: theme.textMuted }]}>{track.description}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </ScrollView>
     </View>
@@ -866,8 +891,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
-  trackIcon: {
-    fontSize: 26,
+  trackIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   trackBadge: {
     paddingHorizontal: 10,

@@ -14,6 +14,12 @@ import { useTheme } from '../context/ThemeContext';
 import Header from '../components/Header';
 import apiClient from '../api/client';
 import { triggerHaptic } from '../utils/haptics';
+import {
+  FlameIcon,
+  ClockIcon,
+  TrophyIcon,
+  SparklesIcon,
+} from '../components/Icons';
 
 export default function DailyArenaScreen({ onBack }) {
   const { theme } = useTheme();
@@ -300,11 +306,11 @@ export default function DailyArenaScreen({ onBack }) {
           </TouchableOpacity>
 
           <View style={styles.timerBadge}>
-            <Text style={styles.timerFire}>⏳</Text>
+            <ClockIcon size={16} color={timeRemaining < 120 ? theme.error : theme.accentGold} />
             <Text
               style={[
                 styles.timerText,
-                { color: timeRemaining < 120 ? theme.error : theme.accentGold },
+                { color: timeRemaining < 120 ? theme.error : theme.accentGold, marginLeft: 6 },
               ]}
             >
               {formatTime(timeRemaining)}
@@ -528,12 +534,12 @@ export default function DailyArenaScreen({ onBack }) {
             {/* Rewards Banner */}
             <View style={styles.rewardsRow}>
               <View style={[styles.rewardChip, { backgroundColor: `${theme.accentGold}18` }]}>
-                <Text style={styles.rewardIcon}>⚡</Text>
-                <Text style={[styles.rewardLabel, { color: theme.accentGold }]}>+{pointsAwarded} XP Earned</Text>
+                <SparklesIcon size={14} color={theme.accentGold} />
+                <Text style={[styles.rewardLabel, { color: theme.accentGold, marginLeft: 6 }]}>+{pointsAwarded} XP Earned</Text>
               </View>
               <View style={[styles.rewardChip, { backgroundColor: `${theme.accent}18` }]}>
-                <Text style={styles.rewardIcon}>🔥</Text>
-                <Text style={[styles.rewardLabel, { color: theme.accent }]}>{streak}-Day Streak</Text>
+                <FlameIcon size={14} color={theme.accent} />
+                <Text style={[styles.rewardLabel, { color: theme.accent, marginLeft: 6 }]}>{streak}-Day Streak</Text>
               </View>
             </View>
           </View>
@@ -701,8 +707,8 @@ export default function DailyArenaScreen({ onBack }) {
         onBack={onBack}
         rightElement={
           <View style={[styles.streakBadge, { backgroundColor: `${theme.accent}18` }]}>
-            <Text style={styles.streakFire}>🔥</Text>
-            <Text style={[styles.streakCount, { color: theme.accent }]}>{streak}d</Text>
+            <FlameIcon size={16} color={theme.accent} />
+            <Text style={[styles.streakCount, { color: theme.accent, marginLeft: 4 }]}>{streak}d</Text>
           </View>
         }
       />
@@ -726,7 +732,8 @@ export default function DailyArenaScreen({ onBack }) {
         <View style={[styles.heroCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
           <View style={styles.badgeRow}>
             <View style={[styles.liveTag, { backgroundColor: `${theme.accent}20` }]}>
-              <Text style={[styles.liveText, { color: theme.accent }]}>🔥 DAILY ARENA</Text>
+              <FlameIcon size={14} color={theme.accent} />
+              <Text style={[styles.liveText, { color: theme.accent, marginLeft: 4 }]}>DAILY ARENA</Text>
             </View>
             <Text style={[styles.bonusTag, { color: theme.accentGold }]}>+50 XP BONUS</Text>
           </View>
@@ -778,7 +785,9 @@ export default function DailyArenaScreen({ onBack }) {
             style={[styles.modeCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
             onPress={() => handleStartDailyChallenge('SOLO')}
           >
-            <Text style={styles.modeIcon}>⚡</Text>
+            <View style={{ marginBottom: 8 }}>
+              <SparklesIcon size={24} color={theme.accent} />
+            </View>
             <Text style={[styles.modeTitle, { color: theme.text }]}>Solo Speed Run</Text>
             <Text style={[styles.modeSub, { color: theme.textMuted }]}>
               Instant 10-question sprint to test your reflexes
@@ -789,7 +798,9 @@ export default function DailyArenaScreen({ onBack }) {
             style={[styles.modeCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
             onPress={handleLoadLeaderboard}
           >
-            <Text style={styles.modeIcon}>🏆</Text>
+            <View style={{ marginBottom: 8 }}>
+              <TrophyIcon size={24} color={theme.accentGold} />
+            </View>
             <Text style={[styles.modeTitle, { color: theme.text }]}>Arena Champions</Text>
             <Text style={[styles.modeSub, { color: theme.textMuted }]}>
               View today's top streaks and highest accuracy scores
