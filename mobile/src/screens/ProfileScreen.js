@@ -13,10 +13,13 @@ import { useTheme } from '../context/ThemeContext';
 import Header from '../components/Header';
 import apiClient from '../api/client';
 import { triggerHaptic } from '../utils/haptics';
+import { ShieldIcon } from '../components/Icons';
 
-export default function ProfileScreen({ onBack }) {
+export default function ProfileScreen({ onBack, onOpenAdmin }) {
   const { user, isTeacher, logout } = useAuth();
   const { theme, themePreference, setThemePreference } = useTheme();
+
+  const isAdmin = user?.role === 'ADMIN' || user?.email?.toLowerCase() === 'msalmanadil44@gmail.com';
 
   const [testingPush, setTestingPush] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -182,6 +185,31 @@ export default function ProfileScreen({ onBack }) {
           </View>
         </View>
 
+        {/* Admin Portal Shortcut if Admin */}
+        {isAdmin && (
+          <TouchableOpacity
+            style={[
+              styles.adminActionCard,
+              { backgroundColor: 'rgba(244, 63, 94, 0.12)', borderColor: 'rgba(244, 63, 94, 0.35)' },
+            ]}
+            onPress={() => {
+              triggerHaptic('medium');
+              onOpenAdmin?.();
+            }}
+          >
+            <View style={styles.adminActionLeft}>
+              <ShieldIcon size={20} color="#F43F5E" />
+              <View>
+                <Text style={styles.adminActionTitle}>Admin Panel</Text>
+                <Text style={[styles.adminActionSub, { color: theme.textMuted }]}>
+                  Manage platform users, educators & canonical bank
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.adminActionArrow}>→</Text>
+          </TouchableOpacity>
+        )}
+
         {/* Sign Out Button */}
         <TouchableOpacity
           style={[styles.logoutBtn, { borderColor: theme.error }]}
@@ -310,5 +338,33 @@ const styles = StyleSheet.create({
   logoutText: {
     fontSize: 14,
     fontWeight: '700',
+  },
+  adminActionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginTop: 16,
+  },
+  adminActionLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  adminActionTitle: {
+    color: '#F43F5E',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  adminActionSub: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  adminActionArrow: {
+    color: '#F43F5E',
+    fontSize: 18,
+    fontWeight: '800',
   },
 });

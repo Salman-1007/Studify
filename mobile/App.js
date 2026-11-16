@@ -30,6 +30,7 @@ import ClassroomsScreen from './src/screens/ClassroomsScreen';
 import WhatsAppChatsScreen from './src/screens/WhatsAppChatsScreen';
 import LeaderboardScreen from './src/screens/LeaderboardScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
+import AdminScreen from './src/screens/AdminScreen';
 
 // Teacher Screens
 import TeacherDashboardScreen from './src/screens/TeacherDashboardScreen';
@@ -173,6 +174,7 @@ function AppContent() {
             onOpenClassrooms={() => setActiveTab('classrooms')}
             onOpenLeaderboard={() => setActiveTab('leaderboard')}
             onOpenProfile={() => setActiveTab('profile')}
+            onOpenAdmin={() => setActiveTab('admin')}
           />
         );
       case 'chats':
@@ -193,9 +195,21 @@ function AppContent() {
       case 'leaderboard':
         return <LeaderboardScreen onBack={() => setActiveTab('dashboard')} />;
       case 'profile':
-        return <ProfileScreen onBack={() => setActiveTab('dashboard')} />;
+        return (
+          <ProfileScreen
+            onBack={() => setActiveTab('dashboard')}
+            onOpenAdmin={() => setActiveTab('admin')}
+          />
+        );
+      case 'admin':
+        return <AdminScreen onBack={() => setActiveTab('dashboard')} />;
       default:
-        return <DashboardScreen onEnterArena={() => setActiveTab('arena')} />;
+        return (
+          <DashboardScreen
+            onEnterArena={() => setActiveTab('arena')}
+            onOpenAdmin={() => setActiveTab('admin')}
+          />
+        );
     }
   };
 

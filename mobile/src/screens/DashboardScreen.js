@@ -22,6 +22,7 @@ import {
   ClassroomsIcon,
   TrophyIcon,
   HubIcon,
+  ShieldIcon,
 } from '../components/Icons';
 
 export default function DashboardScreen({
@@ -34,6 +35,7 @@ export default function DashboardScreen({
   onOpenClassrooms,
   onOpenLeaderboard,
   onOpenProfile,
+  onOpenAdmin,
 }) {
   const { user } = useAuth();
   const { theme } = useTheme();
@@ -104,8 +106,22 @@ export default function DashboardScreen({
 
   const streak = stats?.streakCount || arenaStatus?.streakCount || user?.streakCount || 0;
   const points = stats?.points || user?.points || 0;
+  const isAdmin = user?.role === 'ADMIN' || user?.email?.toLowerCase() === 'msalmanadil44@gmail.com';
 
   const quickActions = [
+    ...(isAdmin
+      ? [
+          {
+            id: 'admin',
+            IconComp: ShieldIcon,
+            iconColor: '#F43F5E',
+            title: 'Admin Panel',
+            sub: 'System Control',
+            badge: 'Admin',
+            onPress: onOpenAdmin,
+          },
+        ]
+      : []),
     {
       id: 'arena',
       IconComp: FlameIcon,
@@ -187,6 +203,20 @@ export default function DashboardScreen({
         subtitle={`Welcome, ${user?.name ? user.name.split(' ')[0] : 'Scholar'}`}
         rightElement={
           <View style={styles.headerRightBox}>
+            {isAdmin && (
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => {
+                  triggerHaptic('medium');
+                  onOpenAdmin?.();
+                }}
+                style={styles.adminTopPill}
+              >
+                <ShieldIcon size={12} color="#F43F5E" />
+                <Text style={styles.adminTopPillText}>Admin</Text>
+              </TouchableOpacity>
+            )}
+
             <View style={[styles.streakPill, { backgroundColor: `${theme.accent}15` }]}>
               <FlameIcon size={16} color={theme.accent} />
               <Text style={[styles.streakCountText, { color: theme.accent }]}>{streak}d</Text>
@@ -216,6 +246,37 @@ export default function DashboardScreen({
           />
         }
       >
+        {/* Admin Executive Shortcut Banner */}
+        {isAdmin && (
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => {
+              triggerHaptic('medium');
+              onOpenAdmin?.();
+            }}
+            style={[styles.adminBannerCard, { backgroundColor: theme.card, borderColor: 'rgba(244, 63, 94, 0.35)' }]}
+          >
+            <View style={styles.adminBannerContent}>
+              <View style={[styles.adminBannerIcon, { backgroundColor: 'rgba(244, 63, 94, 0.15)' }]}>
+                <ShieldIcon size={20} color="#F43F5E" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={styles.adminBannerHeaderRow}>
+                  <Text style={[styles.adminBannerTitle, { color: theme.text }]}>Admin Panel</Text>
+                  <View style={styles.adminTagBadge}>
+                    <Text style={styles.adminTagBadgeText}>MANAGEMENT</Text>
+                  </View>
+                </View>
+                <Text style={[styles.adminBannerSubtitle, { color: theme.textMuted }]}>
+                  Verify educators, canonical MCQs, student safety & notes audit
+                </Text>
+              </View>
+            </View>
+            <View style={styles.adminBannerAction}>
+              <Text style={styles.adminBannerActionText}>Open Panel →</Text>
+            </View>
+          </TouchableOpacity>
+        )}
         {/* ==================================================== */}
         {/* DAILY ARENA HERO CARD (ON HOME PAGE)                  */}
         {/* ==================================================== */}
@@ -590,5 +651,78 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
+  },
+
+  // Admin Top Button & Banner
+  adminTopPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(244, 63, 94, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(244, 63, 94, 0.4)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  adminTopPillText: {
+    color: '#F43F5E',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  adminBannerCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 16,
+  },
+  adminBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  adminBannerIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adminBannerHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  adminBannerTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  adminTagBadge: {
+    backgroundColor: 'rgba(244, 63, 94, 0.2)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  adminTagBadgeText: {
+    color: '#F43F5E',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  adminBannerSubtitle: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  adminBannerAction: {
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.05)',
+    alignItems: 'flex-end',
+  },
+  adminBannerActionText: {
+    color: '#F43F5E',
+    fontSize: 11,
+    fontWeight: '800',
   },
 });
