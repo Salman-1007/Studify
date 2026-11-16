@@ -5,7 +5,7 @@ import { triggerHaptic } from '../utils/haptics';
 import {
   HomeIcon,
   ChatIcon,
-  TestsIcon,
+  BookOpenIcon,
   HubIcon,
   ClassroomsIcon,
   SparklesIcon,
@@ -18,7 +18,7 @@ export default function TabBar({ activeTab, onTabChange, isTeacher = false }) {
   const studentTabs = [
     { key: 'dashboard', label: 'Home', IconComponent: HomeIcon },
     { key: 'chats', label: 'Chats', IconComponent: ChatIcon },
-    { key: 'tests', label: 'Tests', IconComponent: TestsIcon },
+    { key: 'questionBank', label: 'Q-Bank', IconComponent: BookOpenIcon },
     { key: 'studyHub', label: 'Hub', IconComponent: HubIcon },
     { key: 'classrooms', label: 'Classes', IconComponent: ClassroomsIcon },
   ];
@@ -44,7 +44,7 @@ export default function TabBar({ activeTab, onTabChange, isTeacher = false }) {
       ]}
     >
       {tabs.map((tab) => {
-        const isActive = activeTab === tab.key;
+        const isActive = activeTab === tab.key || (tab.key === 'questionBank' && activeTab === 'tests');
         const IconComp = tab.IconComponent;
         const iconColor = isActive ? theme.primary : theme.textMuted;
 

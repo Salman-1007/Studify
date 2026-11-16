@@ -132,6 +132,9 @@ function AppContent() {
           return <WhatsAppChatsScreen onBack={() => setActiveTab('teacherDashboard')} />;
         case 'teacherClassrooms':
           return <TeacherClassroomsScreen />;
+        case 'questionBank':
+        case 'tests':
+          return <StandardTestsScreen onBack={() => setActiveTab('teacherDashboard')} />;
         case 'noteToQuiz':
           return (
             <NoteToQuizScreen
@@ -182,6 +185,7 @@ function AppContent() {
         return <WhatsAppChatsScreen onBack={() => setActiveTab('dashboard')} />;
       case 'arena':
         return <DailyArenaScreen onBack={() => setActiveTab('dashboard')} />;
+      case 'questionBank':
       case 'tests':
         return <StandardTestsScreen onBack={() => setActiveTab('dashboard')} />;
       case 'studyHub':

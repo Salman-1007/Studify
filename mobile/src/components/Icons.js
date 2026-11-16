@@ -622,3 +622,26 @@ export function LayersIcon({ size = 20, color = '#3B82F6', strokeWidth = 2 }) {
     </Svg>
   );
 }
+
+export function BookOpenIcon({ size = 22, color = '#FFFFFF', strokeWidth = 2 }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M2 3H8C10.2091 3 12 4.79086 12 7V21C12 19.3431 10.6569 18 9 18H2V3Z"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M22 3H16C13.7909 3 12 4.79086 12 7V21C12 19.3431 13.3431 18 15 18H22V3Z"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
+export const QuestionBankIcon = BookOpenIcon;
