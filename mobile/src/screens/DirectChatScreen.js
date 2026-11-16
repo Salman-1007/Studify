@@ -18,6 +18,8 @@ import Header from '../components/Header';
 import apiClient, { SOCKET_URL } from '../api/client';
 import { triggerHaptic } from '../utils/haptics';
 
+import { getChatPartner } from './WhatsAppChatsScreen';
+
 export default function DirectChatScreen({ onBack }) {
   const { user, token } = useAuth();
   const { theme } = useTheme();
@@ -116,11 +118,13 @@ export default function DirectChatScreen({ onBack }) {
     try {
       triggerHaptic('medium');
       const res = await apiClient.post('/direct-chats/request', {
+        recipientId: targetUser.id,
         targetUserId: targetUser.id,
       });
 
       const chatData = res.data?.data?.chat || res.data?.data;
-      setPartnerUser(targetUser);
+      const partner = getChatPartner({ ...chatData, partner: targetUser }, user?.id);
+      setPartnerUser(partner);
       setActiveChat(chatData);
       setMessages([]);
       setViewMode('room');
@@ -141,10 +145,7 @@ export default function DirectChatScreen({ onBack }) {
   const handleOpenChat = async (chat) => {
     try {
       triggerHaptic('selection');
-      const otherUser =
-        chat.user1Id === user?.id
-          ? chat.user2 || { name: 'Classmate', id: chat.user2Id }
-          : chat.user1 || { name: 'Classmate', id: chat.user1Id };
+      const otherUser = getChatPartner(chat, user?.id);
 
       setPartnerUser(otherUser);
       setActiveChat(chat);
@@ -375,10 +376,7 @@ export default function DirectChatScreen({ onBack }) {
           </View>
         ) : (
           conversations.map((chat) => {
-            const otherUser =
-              chat.user1Id === user?.id
-                ? chat.user2 || { name: 'Classmate' }
-                : chat.user1 || { name: 'Classmate' };
+            const otherUser = getChatPartner(chat, user?.id);
 
             const lastMessage = chat.lastMessage || chat.messages?.[0];
 
@@ -391,13 +389,13 @@ export default function DirectChatScreen({ onBack }) {
               >
                 <View style={[styles.avatarCircle, { backgroundColor: `${theme.primary}25` }]}>
                   <Text style={[styles.avatarText, { color: theme.primary }]}>
-                    {(otherUser.name || 'C').charAt(0).toUpperCase()}
+                    {otherUser.fallbackInitial}
                   </Text>
                 </View>
 
                 <View style={styles.convInfo}>
                   <View style={styles.convHeaderRow}>
-                    <Text style={[styles.convName, { color: theme.text }]}>{otherUser.name}</Text>
+                    <Text style={[styles.convName, { color: theme.text }]}>{otherUser.displayName}</Text>
                     {lastMessage && (
                       <Text style={[styles.convTime, { color: theme.textMuted }]}>
                         {new Date(lastMessage.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

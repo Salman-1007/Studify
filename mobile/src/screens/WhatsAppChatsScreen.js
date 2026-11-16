@@ -29,6 +29,31 @@ import {
   PaperclipIcon,
 } from '../components/Icons';
 
+export function getChatPartner(chat, currentUserId) {
+  if (!chat) return { name: 'User', username: 'user', displayName: 'User', fallbackInitial: 'U' };
+  const raw =
+    chat.partner ||
+    (chat.user1Id === currentUserId ? chat.user2 : chat.user1) ||
+    (chat.user1?.id === currentUserId ? chat.user2 : chat.user1) ||
+    {};
+
+  const username = raw.username || '';
+  const name = raw.name || '';
+  const emailPrefix = raw.email ? raw.email.split('@')[0] : '';
+
+  const displayName = username ? `@${username}` : (name || emailPrefix || 'User');
+  const fallbackInitial = (username || name || emailPrefix || 'U').charAt(0).toUpperCase();
+
+  return {
+    ...raw,
+    id: raw.id || (chat.user1Id === currentUserId ? chat.user2Id : chat.user1Id),
+    username: username || (displayName.startsWith('@') ? displayName.slice(1) : displayName),
+    name: name || username || 'User',
+    displayName,
+    fallbackInitial,
+  };
+}
+
 export default function WhatsAppChatsScreen({ onBack: _onBack }) {
   const { user, token } = useAuth();
   const { theme } = useTheme();
@@ -143,15 +168,18 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
   const handleOpenDirectRoom = async (chat) => {
     try {
       triggerHaptic('selection');
-      const partner =
-        chat.user1Id === user?.id
-          ? chat.user2 || { name: 'Classmate', id: chat.user2Id }
-          : chat.user1 || { name: 'Classmate', id: chat.user1Id };
+      const partner = getChatPartner(chat, user?.id);
 
       setActiveRoom({ type: 'direct', data: chat, partner });
 
       const res = await apiClient.get(`/direct-chats/${chat.id}/messages`);
-      setRoomMessages(res.data?.data?.messages || []);
+      const msgs = res.data?.data?.messages || [];
+      setRoomMessages(msgs);
+
+      if (res.data?.data?.partner) {
+        const freshPartner = getChatPartner({ partner: res.data.data.partner }, user?.id);
+        setActiveRoom({ type: 'direct', data: chat, partner: freshPartner });
+      }
 
       // Mark read
       apiClient.post(`/direct-chats/${chat.id}/read`).catch(() => {});
@@ -255,6 +283,7 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
     try {
       triggerHaptic('medium');
       const res = await apiClient.post('/direct-chats/request', {
+        recipientId: targetUser.id,
         targetUserId: targetUser.id,
       });
 
@@ -263,7 +292,11 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
       setUserSearchQuery('');
       setUserSearchResults([]);
 
-      handleOpenDirectRoom(chat);
+      const chatWithPartner = {
+        ...chat,
+        partner: chat?.partner || targetUser,
+      };
+      handleOpenDirectRoom(chatWithPartner);
       loadAllChats();
     } catch (err) {
       Alert.alert('Notice', err.response?.data?.message || 'Could not start chat.');
@@ -308,9 +341,9 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
   // ----------------------------------------------------
   const filteredDirect = directChats.filter((c) => {
     if (!filterQuery.trim()) return true;
-    const partner = c.user1Id === user?.id ? c.user2 : c.user1;
-    const name = partner?.name || '';
-    return name.toLowerCase().includes(filterQuery.toLowerCase());
+    const partner = getChatPartner(c, user?.id);
+    const searchTarget = `${partner.displayName} ${partner.name} ${partner.username}`.toLowerCase();
+    return searchTarget.includes(filterQuery.toLowerCase());
   });
 
   const filteredGroups = groupChats.filter((g) => {
@@ -323,9 +356,12 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
   // ----------------------------------------------------
   if (activeRoom) {
     const isDirect = activeRoom.type === 'direct';
-    const title = isDirect ? activeRoom.partner?.name || 'Chat' : activeRoom.data?.name || 'Group';
+    const partner = isDirect ? (activeRoom.partner || getChatPartner(activeRoom.data, user?.id)) : null;
+    const title = isDirect ? partner?.displayName || 'Chat' : activeRoom.data?.name || 'Group';
     const subtitle = isDirect
-      ? activeRoom.partner?.institution || (activeRoom.partner?.grade ? `Class ${activeRoom.partner.grade}` : 'Active Scholar')
+      ? (partner?.name && partner?.username
+          ? `${partner.name} • ${partner.presence?.online ? 'Online' : 'Active'}`
+          : partner?.institution || (partner?.grade ? `Class ${partner.grade}` : 'Active Scholar'))
       : `${activeRoom.data?.subject || 'Circle'} • ${activeRoom.data?._count?.memberships || activeRoom.data?.memberCount || 1} members`;
 
     return (
@@ -386,7 +422,7 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
                 >
                   {!isMe && !isDirect && (
                     <Text style={[styles.waSenderName, { color: theme.waTeal }]}>
-                      {m.sender?.name || 'Classmate'}
+                      {m.sender?.username ? `@${m.sender.username}` : (m.sender?.name || 'Scholar')}
                     </Text>
                   )}
                   <Text style={[styles.waMsgText, { color: isMe ? theme.waSentText : theme.waReceivedText }]}>
@@ -580,10 +616,7 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
             </View>
           ) : (
             filteredDirect.map((chat) => {
-              const partner =
-                chat.user1Id === user?.id
-                  ? chat.user2 || { name: 'Classmate' }
-                  : chat.user1 || { name: 'Classmate' };
+              const partner = getChatPartner(chat, user?.id);
 
               const lastMsg = chat.lastMessage || chat.messages?.[0];
               const timeFormatted = lastMsg
@@ -601,14 +634,14 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
                 >
                   <View style={[styles.waAvatarBox, { backgroundColor: `${theme.primary}20` }]}>
                     <Text style={[styles.waAvatarText, { color: theme.primary }]}>
-                      {(partner.name || 'C').charAt(0).toUpperCase()}
+                      {partner.fallbackInitial}
                     </Text>
                     <View style={styles.onlineDot} />
                   </View>
 
                   <View style={styles.waRowContent}>
                     <View style={styles.waRowHeader}>
-                      <Text style={[styles.waNameText, { color: theme.text }]}>{partner.name}</Text>
+                      <Text style={[styles.waNameText, { color: theme.text }]}>{partner.displayName}</Text>
                       <Text style={[styles.waTimeMeta, { color: theme.textMuted }]}>{timeFormatted}</Text>
                     </View>
 
@@ -795,13 +828,15 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
                   >
                     <View style={[styles.smallAvatar, { backgroundColor: `${theme.primary}20` }]}>
                       <Text style={[styles.smallAvatarText, { color: theme.primary }]}>
-                        {(usr.name || 'U').charAt(0).toUpperCase()}
+                        {(usr.username || usr.name || 'U').charAt(0).toUpperCase()}
                       </Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.searchUserName, { color: theme.text }]}>{usr.name}</Text>
+                      <Text style={[styles.searchUserName, { color: theme.text }]}>
+                        {usr.username ? `@${usr.username}` : usr.name}
+                      </Text>
                       <Text style={[styles.searchUserMeta, { color: theme.textMuted }]}>
-                        {usr.institution || `Class ${usr.grade || 'Student'}`}
+                        {usr.name ? `${usr.name} • ` : ''}{usr.institution || (usr.grade ? `Class ${usr.grade}` : (usr.email || 'Scholar'))}
                       </Text>
                     </View>
                     <Text style={[styles.startChatPill, { color: theme.waTeal }]}>Chat →</Text>

@@ -37,10 +37,10 @@ export const listDirectChats = asyncHandler(async(req, res) => {
             },
             include: {
                 user1: {
-                    select: { id: true, name: true, email: true, avatarUrl: true, grade: true, board: true, points: true, lastSeenAt: true, showOnlineStatus: true },
+                    select: { id: true, name: true, username: true, email: true, avatarUrl: true, grade: true, board: true, points: true, lastSeenAt: true, showOnlineStatus: true },
                 },
                 user2: {
-                    select: { id: true, name: true, email: true, avatarUrl: true, grade: true, board: true, points: true, lastSeenAt: true, showOnlineStatus: true },
+                    select: { id: true, name: true, username: true, email: true, avatarUrl: true, grade: true, board: true, points: true, lastSeenAt: true, showOnlineStatus: true },
                 },
                 messages: {
                     orderBy: { createdAt: 'desc' },
@@ -134,6 +134,7 @@ export const searchUsersForChat = asyncHandler(async(req, res) => {
         select: {
             id: true,
             name: true,
+            username: true,
             email: true,
             avatarUrl: true,
             grade: true,
@@ -170,9 +171,9 @@ export const searchUsersForChat = asyncHandler(async(req, res) => {
 
 export const requestDirectChat = asyncHandler(async(req, res) => {
     const currentUserId = req.user.id;
-    const { recipientId, recipientEmail } = req.body;
+    const { recipientId, recipientEmail, targetUserId: bodyTargetUserId } = req.body;
 
-    let targetUserId = recipientId;
+    let targetUserId = recipientId || bodyTargetUserId;
     if (!targetUserId && recipientEmail) {
         const targetUser = await prisma.user.findUnique({
             where: { email: recipientEmail.trim().toLowerCase() },
@@ -199,8 +200,8 @@ export const requestDirectChat = asyncHandler(async(req, res) => {
             user1Id_user2Id: { user1Id, user2Id },
         },
         include: {
-            user1: { select: { id: true, name: true, email: true, avatarUrl: true, grade: true, board: true } },
-            user2: { select: { id: true, name: true, email: true, avatarUrl: true, grade: true, board: true } },
+            user1: { select: { id: true, name: true, username: true, email: true, avatarUrl: true, grade: true, board: true } },
+            user2: { select: { id: true, name: true, username: true, email: true, avatarUrl: true, grade: true, board: true } },
         },
     });
 
@@ -211,8 +212,8 @@ export const requestDirectChat = asyncHandler(async(req, res) => {
                 where: { id: chat.id },
                 data: { status: 'ACCEPTED' },
                 include: {
-                    user1: { select: { id: true, name: true, email: true, avatarUrl: true, grade: true, board: true } },
-                    user2: { select: { id: true, name: true, email: true, avatarUrl: true, grade: true, board: true } },
+                    user1: { select: { id: true, name: true, username: true, email: true, avatarUrl: true, grade: true, board: true } },
+                    user2: { select: { id: true, name: true, username: true, email: true, avatarUrl: true, grade: true, board: true } },
                 },
             });
         }
@@ -227,8 +228,8 @@ export const requestDirectChat = asyncHandler(async(req, res) => {
             initiatorId: currentUserId,
         },
         include: {
-            user1: { select: { id: true, name: true, email: true, avatarUrl: true, grade: true, board: true } },
-            user2: { select: { id: true, name: true, email: true, avatarUrl: true, grade: true, board: true } },
+            user1: { select: { id: true, name: true, username: true, email: true, avatarUrl: true, grade: true, board: true } },
+            user2: { select: { id: true, name: true, username: true, email: true, avatarUrl: true, grade: true, board: true } },
         },
     });
 
@@ -275,12 +276,13 @@ export const getDirectMessages = asyncHandler(async(req, res) => {
     const partnerId = chat.user1Id === currentUserId ? chat.user2Id : chat.user1Id;
     const partnerUser = await prisma.user.findUnique({
         where: { id: partnerId },
-        select: { id: true, name: true, email: true, avatarUrl: true, lastSeenAt: true, showOnlineStatus: true },
+        select: { id: true, name: true, username: true, email: true, avatarUrl: true, lastSeenAt: true, showOnlineStatus: true },
     });
 
     ok(res, {
         ...result,
         chat,
+        partner: partnerUser ? { ...partnerUser, presence: formatPresence(partnerUser) } : null,
         partnerPresence: formatPresence(partnerUser),
     });
 });

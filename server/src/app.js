@@ -101,6 +101,7 @@ export const createApp = () => {
     app.use('/api/conversations', conversationRoutes);
     app.use('/api/curriculum', memoryCache.middleware('curriculum', 600), curriculumRoutes);
     app.use('/api/tests', standardTestRoutes);
+    app.use('/api/standard-tests', standardTestRoutes);
     app.use('/api/quizzes', quizRoutes);
     app.use('/api/quiz-attempts', quizAttemptRoutes);
     app.use('/api/flashcards', flashcardRoutes);

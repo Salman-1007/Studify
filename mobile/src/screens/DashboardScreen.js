@@ -50,7 +50,7 @@ export default function DashboardScreen({
       const [arenaRes, statsRes, historyRes] = await Promise.allSettled([
         apiClient.get('/daily-arena/status'),
         apiClient.get('/auth/me'),
-        apiClient.get('/standard-tests/history'),
+        apiClient.get('/tests/history').catch(() => apiClient.get('/standard-tests/history')),
       ]);
 
       if (arenaRes.status === 'fulfilled') {

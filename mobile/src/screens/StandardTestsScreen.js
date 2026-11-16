@@ -131,7 +131,9 @@ export default function StandardTestsScreen({ onBack }) {
   const loadHistory = useCallback(async () => {
     try {
       setLoadingHistory(true);
-      const res = await apiClient.get('/standard-tests/history');
+      const res = await apiClient
+        .get('/tests/history')
+        .catch(() => apiClient.get('/standard-tests/history'));
       setHistoryList(res.data?.data?.attempts || res.data?.data || []);
     } catch (err) {
       console.warn('[StandardTests] History error:', err.message);
@@ -188,7 +190,9 @@ export default function StandardTestsScreen({ onBack }) {
         difficulty,
       };
 
-      const res = await apiClient.post('/standard-tests', payload);
+      const res = await apiClient
+        .post('/tests', payload)
+        .catch(() => apiClient.post('/standard-tests', payload));
       const data = res.data?.data;
 
       if (data?.questions?.length) {
@@ -245,11 +249,19 @@ export default function StandardTestsScreen({ onBack }) {
         selectedOption: selectedAnswers[idx] || null,
       }));
 
-      const res = await apiClient.post('/standard-tests/submit', {
-        attemptId: activeAttempt?.attemptId || activeAttempt?.id,
-        answers: answersArray,
-        timeTakenSecs: totalTimeTaken,
-      });
+      const res = await apiClient
+        .post('/tests/submit', {
+          attemptId: activeAttempt?.attemptId || activeAttempt?.id,
+          answers: answersArray,
+          timeTakenSecs: totalTimeTaken,
+        })
+        .catch(() =>
+          apiClient.post('/standard-tests/submit', {
+            attemptId: activeAttempt?.attemptId || activeAttempt?.id,
+            answers: answersArray,
+            timeTakenSecs: totalTimeTaken,
+          })
+        );
 
       const resultData = res.data?.data;
       setTestResult(resultData);
@@ -272,7 +284,9 @@ export default function StandardTestsScreen({ onBack }) {
   const fetchAiDiagnostic = async (attemptId) => {
     try {
       setLoadingDiagnostic(true);
-      const res = await apiClient.post(`/standard-tests/${attemptId}/ai-diagnostic`);
+      const res = await apiClient
+        .post(`/tests/${attemptId}/ai-diagnostic`)
+        .catch(() => apiClient.post(`/standard-tests/${attemptId}/ai-diagnostic`));
       setDiagnostic(res.data?.data?.diagnostic || res.data?.data);
     } catch (err) {
       console.warn('[StandardTests] Diagnostic error:', err.message);

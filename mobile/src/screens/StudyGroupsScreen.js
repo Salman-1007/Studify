@@ -247,7 +247,7 @@ export default function StudyGroupsScreen({ onBack }) {
               >
                 {!isMe && (
                   <Text style={[styles.senderName, { color: theme.primary }]}>
-                    {m.sender?.name || 'Classmate'}
+                    {m.sender?.username ? `@${m.sender.username}` : (m.sender?.name || 'Scholar')}
                   </Text>
                 )}
                 <Text style={[styles.msgText, { color: isMe ? '#FFF' : theme.text }]}>{m.content}</Text>

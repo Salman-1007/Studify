@@ -32,7 +32,7 @@ const SCOPE_CONFIG = {
         receiptModel: 'directMessageReceipt',
         fk: 'chatId',
         targetType: 'DIRECT',
-        senderSelect: { id: true, name: true, email: true, avatarUrl: true, role: true },
+        senderSelect: { id: true, name: true, username: true, email: true, avatarUrl: true, role: true },
     },
 };
 
