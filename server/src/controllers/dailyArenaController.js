@@ -2,6 +2,7 @@ import { prisma } from '../config/db.js';
 import { ok } from '../utils/response.js';
 import { asyncHandler } from '../utils/asyncHandler.js';
 import { ApiError } from '../utils/ApiError.js';
+import { broadcastDailyArenaNotification } from '../services/pushService.js';
 
 // Deterministic Pseudo-Random Generator (LCG) based on string seed
 const createSeededRandom = (seedStr) => {
@@ -413,5 +414,13 @@ export const getDailyLeaderboard = asyncHandler(async(req, res) => {
     ok(res, {
         date: dateStr,
         leaderboard,
+    });
+});
+
+export const notifyDailyArena = asyncHandler(async (req, res) => {
+    const result = await broadcastDailyArenaNotification();
+    ok(res, {
+        message: 'Daily Arena push notifications dispatched successfully',
+        dispatched: result.dispatched,
     });
 });

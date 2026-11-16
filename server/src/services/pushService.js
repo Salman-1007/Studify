@@ -180,3 +180,57 @@ export const sendPushToUsers = async (userIds, { title, body, type = 'ANNOUNCEME
   }
   return results;
 };
+
+/**
+ * Broadcast Daily Arena arrival push notification to all users with active push tokens.
+ */
+export const broadcastDailyArenaNotification = async () => {
+  try {
+    const tokens = await prisma.pushToken.findMany({
+      select: { userId: true, token: true },
+    });
+
+    if (!tokens || tokens.length === 0) {
+      return { dispatched: 0 };
+    }
+
+    const messages = tokens.map((t) => ({
+      to: t.token,
+      sound: 'default',
+      title: '🔥 Daily Arena is Live!',
+      body: 'Today\'s 15-question daily challenge is ready! Complete it to extend your study streak and earn +50 XP bonus.',
+      channelId: 'default',
+      priority: 'high',
+      _displayInForeground: true,
+      data: {
+        type: 'DAILY_ARENA',
+        screen: 'DailyArena',
+      },
+    }));
+
+    const tickets = await sendExpoChunks(messages);
+
+    // Also persist AppNotification records for each user
+    const uniqueUserIds = Array.from(new Set(tokens.map((t) => t.userId)));
+    for (const uid of uniqueUserIds) {
+      await prisma.appNotification.create({
+        data: {
+          userId: uid,
+          title: '🔥 Daily Arena is Live!',
+          body: 'Today\'s 15-question daily challenge is ready! Earn your +50 XP streak bonus.',
+          type: 'DAILY_ARENA',
+          data: { screen: 'DailyArena' },
+          isRead: false,
+        },
+      }).catch(() => {});
+    }
+
+    return {
+      dispatched: messages.length,
+      tickets,
+    };
+  } catch (err) {
+    console.error('[PushService] broadcastDailyArenaNotification error:', err.message);
+    return { dispatched: 0, error: err.message };
+  }
+};

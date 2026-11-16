@@ -8,10 +8,10 @@ export default function TabBar({ activeTab, onTabChange, isTeacher = false }) {
 
   const studentTabs = [
     { key: 'dashboard', label: 'Home', icon: '🏠' },
-    { key: 'quizzes', label: 'Quizzes', icon: '📝' },
+    { key: 'arena', label: 'Arena', icon: '🔥' },
+    { key: 'tests', label: 'Tests', icon: '📝' },
+    { key: 'studyHub', label: 'Hub', icon: '💡' },
     { key: 'classrooms', label: 'Classes', icon: '🏫' },
-    { key: 'chat', label: 'Chat', icon: '💬' },
-    { key: 'profile', label: 'Profile', icon: '👤' },
   ];
 
   const teacherTabs = [
@@ -19,7 +19,7 @@ export default function TabBar({ activeTab, onTabChange, isTeacher = false }) {
     { key: 'teacherClassrooms', label: 'Classes', icon: '🏫' },
     { key: 'noteToQuiz', label: 'Note→Quiz', icon: '✨' },
     { key: 'analytics', label: 'Analytics', icon: '📈' },
-    { key: 'profile', label: 'Profile', icon: '👤' },
+    { key: 'chat', label: 'Messages', icon: '💬' },
   ];
 
   const tabs = isTeacher ? teacherTabs : studentTabs;
@@ -49,7 +49,7 @@ export default function TabBar({ activeTab, onTabChange, isTeacher = false }) {
             <View
               style={[
                 styles.iconContainer,
-                isActive && { backgroundColor: `${theme.primary}20` },
+                isActive && { backgroundColor: `${theme.primary}18` },
               ]}
             >
               <Text style={[styles.tabIcon, isActive && styles.tabIconActive]}>
@@ -60,7 +60,7 @@ export default function TabBar({ activeTab, onTabChange, isTeacher = false }) {
               style={[
                 styles.tabLabel,
                 { color: isActive ? theme.primary : theme.textMuted },
-                isActive && { fontWeight: '700' },
+                isActive && { fontWeight: '800' },
               ]}
             >
               {tab.label}
@@ -99,11 +99,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   tabIconActive: {
-    transform: [{ scale: 1.1 }],
+    transform: [{ scale: 1.08 }],
   },
   tabLabel: {
-    fontSize: 10,
+    fontSize: 11,
     marginTop: 2,
-    fontWeight: '500',
   },
 });

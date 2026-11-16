@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -18,35 +18,36 @@ export default function TeacherDashboardScreen({ onNavigateTab }) {
   const { user } = useAuth();
   const { theme } = useTheme();
 
+  const [dashboardData, setDashboardData] = useState(null);
   const [classrooms, setClassrooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadTeacherData = async () => {
+  const loadTeacherData = useCallback(async () => {
     try {
-      const res = await apiClient.get('/teacher/classrooms');
-      setClassrooms(res.data?.data?.classrooms || []);
-    } catch {
-      // Demo classrooms
-      setClassrooms([
-        {
-          id: 't-cls-1',
-          name: 'Class 10 Physics Alpha',
-          subject: 'Physics',
-          grade: '10',
-          joinCode: 'CLS-93A87E',
-          _count: { memberships: 24, assignments: 3 },
-        },
+      const [dashRes, clsRes] = await Promise.allSettled([
+        apiClient.get('/teacher/dashboard'),
+        apiClient.get('/teacher/classrooms'),
       ]);
+
+      if (dashRes.status === 'fulfilled') {
+        setDashboardData(dashRes.value.data?.data);
+      }
+
+      if (clsRes.status === 'fulfilled') {
+        setClassrooms(clsRes.value.data?.data?.classrooms || clsRes.value.data?.data || []);
+      }
+    } catch (err) {
+      console.warn('[TeacherDashboard] Error loading data:', err.message);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadTeacherData();
-  }, []);
+  }, [loadTeacherData]);
 
   const onRefresh = () => {
     triggerHaptic('light');
@@ -54,13 +55,16 @@ export default function TeacherDashboardScreen({ onNavigateTab }) {
     loadTeacherData();
   };
 
-  const totalStudents = classrooms.reduce((acc, c) => acc + (c._count?.memberships || 0), 0);
+  const totalStudents = classrooms.reduce(
+    (acc, c) => acc + (c._count?.memberships || c.memberCount || 0),
+    0
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
       <Header
         title="Educator Portal"
-        subtitle={user?.institution || 'Academic Administration'}
+        subtitle={user?.institution || user?.name || 'Academic Workspace'}
         rightElement={
           <View style={[styles.badge, { backgroundColor: `${theme.primary}20` }]}>
             <Text style={[styles.badgeText, { color: theme.primary }]}>TEACHER</Text>
@@ -75,129 +79,117 @@ export default function TeacherDashboardScreen({ onNavigateTab }) {
             refreshing={refreshing}
             onRefresh={onRefresh}
             tintColor={theme.primary}
+            colors={[theme.primary]}
           />
         }
       >
         {/* Metric Cards */}
         <View style={styles.metricsRow}>
-          <View
-            style={[
-              styles.metricCard,
-              { backgroundColor: theme.card, borderColor: theme.cardBorder },
-            ]}
-          >
+          <View style={[styles.metricCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
             <Text style={styles.metricIcon}>🏫</Text>
-            <Text style={[styles.metricVal, { color: theme.text }]}>
-              {classrooms.length}
-            </Text>
-            <Text style={[styles.metricLabel, { color: theme.textMuted }]}>
-              Active Classes
-            </Text>
+            <Text style={[styles.metricVal, { color: theme.text }]}>{classrooms.length}</Text>
+            <Text style={[styles.metricLabel, { color: theme.textMuted }]}>Active Classes</Text>
           </View>
-          <View
-            style={[
-              styles.metricCard,
-              { backgroundColor: theme.card, borderColor: theme.cardBorder },
-            ]}
-          >
-            <Text style={styles.metricIcon}>👥</Text>
-            <Text style={[styles.metricVal, { color: theme.text }]}>
-              {totalStudents}
-            </Text>
-            <Text style={[styles.metricLabel, { color: theme.textMuted }]}>
-              Total Students
-            </Text>
+
+          <View style={[styles.metricCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+            <Text style={styles.metricIcon}>👨‍🎓</Text>
+            <Text style={[styles.metricVal, { color: theme.primary }]}>{totalStudents}</Text>
+            <Text style={[styles.metricLabel, { color: theme.textMuted }]}>Enrolled Students</Text>
           </View>
-          <View
-            style={[
-              styles.metricCard,
-              { backgroundColor: theme.card, borderColor: theme.cardBorder },
-            ]}
-          >
+
+          <View style={[styles.metricCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
             <Text style={styles.metricIcon}>📝</Text>
-            <Text style={[styles.metricVal, { color: theme.text }]}>
-              {classrooms.reduce((acc, c) => acc + (c._count?.assignments || 0), 0)}
+            <Text style={[styles.metricVal, { color: theme.accentGold }]}>
+              {dashboardData?.totalAssignments || dashboardData?.activeAssignments || 0}
             </Text>
-            <Text style={[styles.metricLabel, { color: theme.textMuted }]}>
-              Quizzes Active
-            </Text>
+            <Text style={[styles.metricLabel, { color: theme.textMuted }]}>Assignments</Text>
           </View>
         </View>
 
-        {/* Quick Actions */}
-        <Text style={[styles.sectionTitle, { color: theme.text, marginTop: 20 }]}>
-          Educator Actions
-        </Text>
-        <View style={styles.actionGrid}>
+        {/* Action Shortcuts */}
+        <Text style={[styles.sectionHeading, { color: theme.text }]}>Educator Tools</Text>
+
+        <View style={styles.toolsGrid}>
           <TouchableOpacity
-            style={[styles.actionCard, { backgroundColor: theme.primary }]}
             activeOpacity={0.8}
             onPress={() => {
-              triggerHaptic('medium');
+              triggerHaptic('light');
               if (onNavigateTab) onNavigateTab('noteToQuiz');
             }}
+            style={[styles.toolCard, { backgroundColor: theme.card, borderColor: `${theme.primary}50` }]}
           >
-            <Text style={styles.actionCardIcon}>✨</Text>
-            <Text style={styles.actionCardTitle}>AI Note-to-Quiz Generator</Text>
-            <Text style={styles.actionCardSub}>
-              Snap handwritten notes or upload PDFs to create graded quizzes
+            <Text style={styles.toolIcon}>✨</Text>
+            <Text style={[styles.toolTitle, { color: theme.text }]}>Note-to-Quiz AI</Text>
+            <Text style={[styles.toolSub, { color: theme.textMuted }]}>
+              Paste lecture notes or upload a chapter to generate verified board MCQs
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[
-              styles.actionCardSecondary,
-              { backgroundColor: theme.card, borderColor: theme.cardBorder },
-            ]}
             activeOpacity={0.8}
             onPress={() => {
               triggerHaptic('light');
               if (onNavigateTab) onNavigateTab('teacherClassrooms');
             }}
+            style={[styles.toolCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
           >
-            <Text style={styles.actionCardIcon}>🏫</Text>
-            <Text style={[styles.actionCardTitleSec, { color: theme.text }]}>
-              Classroom & Join Code Manager
+            <Text style={styles.toolIcon}>📢</Text>
+            <Text style={[styles.toolTitle, { color: theme.text }]}>Post Announcements</Text>
+            <Text style={[styles.toolSub, { color: theme.textMuted }]}>
+              Broadcast exam dates and syllabus updates with instant mobile push notifications
             </Text>
-            <Text style={[styles.actionCardSubSec, { color: theme.textMuted }]}>
-              Generate join codes, view student rosters, and post announcements
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => {
+              triggerHaptic('light');
+              if (onNavigateTab) onNavigateTab('analytics');
+            }}
+            style={[styles.toolCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
+          >
+            <Text style={styles.toolIcon}>📈</Text>
+            <Text style={[styles.toolTitle, { color: theme.text }]}>Class Analytics</Text>
+            <Text style={[styles.toolSub, { color: theme.textMuted }]}>
+              Inspect class-wide average accuracy, completion rates, and weak topics
             </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Classrooms Summary */}
-        <Text style={[styles.sectionTitle, { color: theme.text, marginTop: 24 }]}>
-          Your Active Digital Classrooms
-        </Text>
+        {/* Classrooms Preview */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={[styles.sectionHeading, { color: theme.text, marginBottom: 0 }]}>My Classrooms</Text>
+          <TouchableOpacity onPress={() => onNavigateTab && onNavigateTab('teacherClassrooms')}>
+            <Text style={[styles.actionLink, { color: theme.primary }]}>Manage All →</Text>
+          </TouchableOpacity>
+        </View>
+
         {loading ? (
-          <ActivityIndicator color={theme.primary} style={{ marginTop: 20 }} />
+          <ActivityIndicator color={theme.primary} style={{ marginTop: 24 }} />
         ) : classrooms.length === 0 ? (
-          <Text style={{ color: theme.textMuted, fontSize: 13, marginTop: 8 }}>
-            No classrooms created yet. Tap Classroom Manager to create one.
-          </Text>
+          <View style={[styles.emptyCard, { backgroundColor: theme.card }]}>
+            <Text style={[styles.emptyText, { color: theme.textMuted }]}>
+              No digital classes created yet. Tap "Manage All" to create your first class.
+            </Text>
+          </View>
         ) : (
-          classrooms.map((cls) => (
-            <View
+          classrooms.slice(0, 3).map((cls) => (
+            <TouchableOpacity
               key={cls.id}
-              style={[
-                styles.classCard,
-                { backgroundColor: theme.card, borderColor: theme.cardBorder },
-              ]}
+              activeOpacity={0.7}
+              onPress={() => onNavigateTab && onNavigateTab('teacherClassrooms')}
+              style={[styles.classItem, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
             >
-              <View style={styles.classHeader}>
-                <View>
-                  <Text style={[styles.className, { color: theme.text }]}>{cls.name}</Text>
-                  <Text style={[styles.classSub, { color: theme.textMuted }]}>
-                    {cls.subject} · Grade {cls.grade}
-                  </Text>
-                </View>
-                <View style={[styles.joinPill, { backgroundColor: `${theme.primary}20` }]}>
-                  <Text style={[styles.joinPillText, { color: theme.primary }]}>
-                    {cls.joinCode}
-                  </Text>
-                </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.className, { color: theme.text }]}>{cls.name}</Text>
+                <Text style={[styles.classMeta, { color: theme.textMuted }]}>
+                  {cls.subject} • Grade {cls.classGrade || cls.grade || '10'}
+                </Text>
               </View>
-            </View>
+              <View style={[styles.codeBadge, { backgroundColor: `${theme.primary}18` }]}>
+                <Text style={[styles.codeText, { color: theme.primary }]}>{cls.joinCode}</Text>
+              </View>
+            </TouchableOpacity>
           ))
         )}
       </ScrollView>
@@ -210,13 +202,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scroll: {
-    padding: 18,
-    paddingBottom: 32,
+    padding: 16,
+    paddingBottom: 40,
   },
   badge: {
     paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingVertical: 5,
+    borderRadius: 12,
   },
   badgeText: {
     fontSize: 11,
@@ -225,93 +217,99 @@ const styles = StyleSheet.create({
   metricsRow: {
     flexDirection: 'row',
     gap: 10,
+    marginBottom: 24,
   },
   metricCard: {
     flex: 1,
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
     alignItems: 'center',
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
   },
   metricIcon: {
-    fontSize: 20,
-    marginBottom: 4,
+    fontSize: 22,
+    marginBottom: 6,
   },
   metricVal: {
     fontSize: 18,
     fontWeight: '800',
+    marginBottom: 2,
   },
   metricLabel: {
     fontSize: 10,
-    marginTop: 2,
+    fontWeight: '600',
+    textAlign: 'center',
   },
-  sectionTitle: {
-    fontSize: 15,
+  sectionHeading: {
+    fontSize: 16,
     fontWeight: '800',
     marginBottom: 12,
+    letterSpacing: -0.3,
   },
-  actionGrid: {
-    gap: 12,
+  toolsGrid: {
+    gap: 10,
+    marginBottom: 24,
   },
-  actionCard: {
+  toolCard: {
+    padding: 16,
     borderRadius: 16,
-    padding: 18,
+    borderWidth: 1.5,
   },
-  actionCardIcon: {
+  toolIcon: {
     fontSize: 24,
     marginBottom: 6,
   },
-  actionCardTitle: {
-    color: '#FFF',
-    fontSize: 16,
+  toolTitle: {
+    fontSize: 15,
     fontWeight: '800',
+    marginBottom: 2,
   },
-  actionCardSub: {
-    color: 'rgba(255,255,255,0.85)',
+  toolSub: {
     fontSize: 12,
-    marginTop: 4,
     lineHeight: 16,
   },
-  actionCardSecondary: {
-    borderRadius: 16,
-    padding: 18,
-    borderWidth: 1,
-  },
-  actionCardTitleSec: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  actionCardSubSec: {
-    fontSize: 12,
-    marginTop: 4,
-    lineHeight: 16,
-  },
-  classCard: {
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    marginBottom: 10,
-  },
-  classHeader: {
+  sectionHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 12,
+  },
+  actionLink: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  classItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 8,
   },
   className: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '700',
+    marginBottom: 2,
   },
-  classSub: {
+  classMeta: {
     fontSize: 12,
-    marginTop: 2,
   },
-  joinPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+  codeBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
   },
-  joinPillText: {
-    fontSize: 11,
-    fontWeight: '700',
+  codeText: {
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  emptyCard: {
+    padding: 24,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  emptyText: {
+    fontSize: 13,
+    textAlign: 'center',
   },
 });

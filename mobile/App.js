@@ -16,15 +16,20 @@ import {
   attachNotificationListeners,
 } from './src/services/notifications';
 
-// Components & Screens
+// Shared Components & Auth
 import StudifyLogo from './src/components/StudifyLogo';
 import TabBar from './src/components/TabBar';
 import LoginScreen from './src/screens/LoginScreen';
 import SignupScreen from './src/screens/SignupScreen';
+
+// Student Screens
 import DashboardScreen from './src/screens/DashboardScreen';
-import QuizzesScreen from './src/screens/QuizzesScreen';
+import DailyArenaScreen from './src/screens/DailyArenaScreen';
+import StandardTestsScreen from './src/screens/StandardTestsScreen';
+import StudyHubScreen from './src/screens/StudyHubScreen';
 import ClassroomsScreen from './src/screens/ClassroomsScreen';
-import ChatScreen from './src/screens/ChatScreen';
+import DirectChatScreen from './src/screens/DirectChatScreen';
+import LeaderboardScreen from './src/screens/LeaderboardScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 
 // Teacher Screens
@@ -39,8 +44,7 @@ function AppContent() {
 
   const [authView, setAuthView] = useState('login'); // 'login' | 'signup'
   const [activeTab, setActiveTab] = useState(isTeacher ? 'teacherDashboard' : 'dashboard');
-  const [activeTrack, setActiveTrack] = useState(null);
-  const [activeChatClassroom, setActiveChatClassroom] = useState(null);
+  const [hubSection, setHubSection] = useState(null);
 
   // Initialize push notification listeners and channels on mount
   useEffect(() => {
@@ -48,14 +52,18 @@ function AppContent() {
 
     const unsubscribe = attachNotificationListeners({
       onNotificationReceived: (notification) => {
-        console.log('[App] Foreground notification received:', notification.request.content.title);
+        console.log('[App] Foreground push received:', notification.request.content.title);
       },
       onNotificationResponse: (data) => {
-        console.log('[App] Notification tapped with deep link data:', data);
-        if (data?.screen === 'ChatRoom') {
+        console.log('[App] Push tapped with deep link payload:', data);
+        if (data?.screen === 'DailyArena' || data?.type === 'DAILY_ARENA') {
+          setActiveTab('arena');
+        } else if (data?.screen === 'ChatRoom' || data?.type === 'DIRECT_MESSAGE' || data?.type === 'CHAT_MESSAGE') {
           setActiveTab('chat');
-        } else if (data?.screen === 'QuizRunner') {
-          setActiveTab('quizzes');
+        } else if (data?.screen === 'QuizRunner' || data?.type === 'NEW_QUIZ') {
+          setActiveTab('tests');
+        } else if (data?.screen === 'Classroom' || data?.type === 'ANNOUNCEMENT') {
+          setActiveTab('classrooms');
         }
       },
     });
@@ -105,6 +113,9 @@ function AppContent() {
 
   // Authenticated Role-Aware Navigation
   const renderScreen = () => {
+    // ----------------------------------------------------
+    // TEACHER FLOW
+    // ----------------------------------------------------
     if (isTeacher) {
       switch (activeTab) {
         case 'teacherDashboard':
@@ -123,6 +134,8 @@ function AppContent() {
           );
         case 'analytics':
           return <ClassAnalyticsScreen />;
+        case 'chat':
+          return <DirectChatScreen onBack={() => setActiveTab('teacherDashboard')} />;
         case 'profile':
           return <ProfileScreen />;
         default:
@@ -130,54 +143,56 @@ function AppContent() {
       }
     }
 
-    // Student Views
+    // ----------------------------------------------------
+    // STUDENT FLOW
+    // ----------------------------------------------------
     switch (activeTab) {
       case 'dashboard':
         return (
           <DashboardScreen
-            onSelectTrack={(track) => {
-              setActiveTrack(track);
-              setActiveTab('quizzes');
+            onEnterArena={() => setActiveTab('arena')}
+            onOpenStandardTests={() => setActiveTab('tests')}
+            onOpenMentor={() => {
+              setHubSection('mentor');
+              setActiveTab('studyHub');
             }}
-            onEnterArena={() => {
-              setActiveTrack({ name: 'Daily Mock Arena' });
-              setActiveTab('quizzes');
+            onOpenMaterials={() => {
+              setHubSection('materials');
+              setActiveTab('studyHub');
             }}
+            onOpenFlashcards={() => {
+              setHubSection('flashcards');
+              setActiveTab('studyHub');
+            }}
+            onOpenStudyGroups={() => {
+              setHubSection('groups');
+              setActiveTab('studyHub');
+            }}
+            onOpenClassrooms={() => setActiveTab('classrooms')}
+            onOpenLeaderboard={() => setActiveTab('leaderboard')}
+            onOpenProfile={() => setActiveTab('profile')}
           />
         );
-      case 'quizzes':
-        return (
-          <QuizzesScreen
-            initialTrack={activeTrack}
-            onBack={() => {
-              setActiveTrack(null);
-              setActiveTab('dashboard');
-            }}
-          />
-        );
+      case 'arena':
+        return <DailyArenaScreen />;
+      case 'tests':
+        return <StandardTestsScreen />;
+      case 'studyHub':
+        return <StudyHubScreen initialSection={hubSection} />;
       case 'classrooms':
         return (
           <ClassroomsScreen
-            onOpenChat={(classroom) => {
-              setActiveChatClassroom(classroom);
-              setActiveTab('chat');
-            }}
+            onOpenChat={() => setActiveTab('chat')}
           />
         );
       case 'chat':
-        return (
-          <ChatScreen
-            targetClassroom={activeChatClassroom}
-            onBack={() => {
-              setActiveChatClassroom(null);
-              setActiveTab('classrooms');
-            }}
-          />
-        );
+        return <DirectChatScreen onBack={() => setActiveTab('dashboard')} />;
+      case 'leaderboard':
+        return <LeaderboardScreen onBack={() => setActiveTab('dashboard')} />;
       case 'profile':
         return <ProfileScreen />;
       default:
-        return <DashboardScreen />;
+        return <DashboardScreen onEnterArena={() => setActiveTab('arena')} />;
     }
   };
 
@@ -188,6 +203,7 @@ function AppContent() {
       <TabBar
         activeTab={activeTab}
         onTabChange={(tab) => {
+          setHubSection(null);
           setActiveTab(tab);
         }}
         isTeacher={isTeacher}
@@ -221,19 +237,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  splashBadge: {
-    width: 68,
-    height: 68,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  splashBadgeText: {
-    color: '#FFF',
-    fontSize: 36,
-    fontWeight: '900',
   },
   splashTitle: {
     fontSize: 24,

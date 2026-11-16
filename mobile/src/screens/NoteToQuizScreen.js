@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -10,20 +10,43 @@ import {
   Alert,
 } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../context/ThemeContext';
 import Header from '../components/Header';
+import apiClient from '../api/client';
 import { triggerHaptic } from '../utils/haptics';
 
-export default function NoteToQuizScreen({ onQuizCreated }) {
+export default function NoteToQuizScreen({ onQuizCreated, onBack }) {
   const { theme } = useTheme();
 
   const [pickedFile, setPickedFile] = useState(null);
-  const [rawText, setRawText] = useState('');
+  const [noteText, setNoteText] = useState('');
+  const [topic, setTopic] = useState('');
+  const [subject, setSubject] = useState('Physics');
+  const [difficulty, setDifficulty] = useState('MEDIUM');
+  const [numQuestions, setNumQuestions] = useState(10);
   const [generating, setGenerating] = useState(false);
-  const [draftQuiz, setDraftQuiz] = useState(null);
 
-  // 1. Pick PDF / DOCX / TXT
+  // Generated Quiz state
+  const [generatedQuiz, setGeneratedQuiz] = useState(null);
+  const [assigning, setAssigning] = useState(false);
+  const [classrooms, setClassrooms] = useState([]);
+  const [selectedClassId, setSelectedClassId] = useState(null);
+
+  // Fetch teacher classrooms to allow direct assigning
+  useEffect(() => {
+    apiClient
+      .get('/teacher/classrooms')
+      .then((res) => {
+        const clsList = res.data?.data?.classrooms || res.data?.data || [];
+        setClassrooms(clsList);
+        if (clsList.length > 0) {
+          setSelectedClassId(clsList[0].id);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // 1. Pick PDF / DOCX / TXT Document
   const handlePickDocument = async () => {
     try {
       triggerHaptic('light');
@@ -39,6 +62,9 @@ export default function NoteToQuizScreen({ onQuizCreated }) {
       if (!res.canceled && res.assets && res.assets.length > 0) {
         const file = res.assets[0];
         setPickedFile(file);
+        if (!topic) {
+          setTopic(file.name.replace(/\.[^/.]+$/, ''));
+        }
         triggerHaptic('success');
       }
     } catch (err) {
@@ -46,36 +72,11 @@ export default function NoteToQuizScreen({ onQuizCreated }) {
     }
   };
 
-  // 2. Camera Capture for Handwritten Notes
-  const handleCapturePhoto = async () => {
-    try {
-      triggerHaptic('light');
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
-      if (!permission.granted) {
-        Alert.alert('Permission Denied', 'Camera access is required to photograph notes.');
-        return;
-      }
-
-      const res = await ImagePicker.launchCameraAsync({
-        quality: 0.8,
-        allowsEditing: true,
-      });
-
-      if (!res.canceled && res.assets && res.assets.length > 0) {
-        const asset = res.assets[0];
-        setPickedFile({ name: 'handwritten_note.jpg', size: asset.fileSize || 1024 });
-        triggerHaptic('success');
-      }
-    } catch (err) {
-      console.warn('Camera capture error:', err);
-    }
-  };
-
-  // 3. Generate Draft Quiz
+  // 2. Generate Quiz using live backend AI
   const handleGenerateQuiz = async () => {
-    if (!pickedFile && !rawText.trim()) {
-      Alert.alert('Content Required', 'Please pick a file, snap a photo, or paste note text.');
-      triggerHaptic('error');
+    if (!pickedFile && !noteText.trim() && !topic.trim()) {
+      Alert.alert('Content Required', 'Please pick a file, paste notes, or enter a topic.');
+      triggerHaptic('warning');
       return;
     }
 
@@ -83,222 +84,307 @@ export default function NoteToQuizScreen({ onQuizCreated }) {
       setGenerating(true);
       triggerHaptic('medium');
 
-      // Attempt AI generation endpoint or create structured draft
-      const generatedDraft = {
-        title: pickedFile ? `Quiz from ${pickedFile.name.slice(0, 20)}` : 'AI Generated Notes Quiz',
-        questions: [
-          {
-            question: 'Based on the uploaded study material, what is the core governing principle?',
-            options: ['Equilibrium of Forces', 'Thermal Conduction', 'Electromagnetic Induction', 'Fluid Dynamics'],
-            correctAnswer: 'Equilibrium of Forces',
-            explanation: 'Derived from chapter introduction notes.',
-          },
-          {
-            question: 'Which condition must be met according to the first condition of equilibrium?',
-            options: ['Sum of forces equals zero', 'Sum of torques equals zero', 'Acceleration is maximal', 'Mass equals energy'],
-            correctAnswer: 'Sum of forces equals zero',
-            explanation: 'The vector sum of all external forces acting on the body must be zero (ΣF = 0).',
-          },
-          {
-            question: 'Is mechanical work done when a force is applied perpendicular to displacement?',
-            options: ['True', 'False'],
-            correctAnswer: 'False',
-            explanation: 'W = F·d·cos(90°) = 0, so zero work is performed.',
-          },
-        ],
-      };
+      let res;
+      if (pickedFile) {
+        const formData = new FormData();
+        formData.append('file', {
+          uri: pickedFile.uri,
+          name: pickedFile.name,
+          type: pickedFile.mimeType || 'application/pdf',
+        });
+        formData.append('topic', topic || pickedFile.name);
+        formData.append('subject', subject);
+        formData.append('difficulty', difficulty);
+        formData.append('numQuestions', String(numQuestions));
 
-      setDraftQuiz(generatedDraft);
+        res = await apiClient.post('/teacher/quizzes/generate-from-notes', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+      } else {
+        res = await apiClient.post('/teacher/quizzes/generate-from-notes', {
+          materialText: noteText,
+          topic: topic || 'Classroom Review',
+          subject,
+          difficulty,
+          numQuestions,
+        });
+      }
+
+      const quizData = res.data?.data?.quiz || res.data?.data;
+      setGeneratedQuiz(quizData);
       triggerHaptic('success');
+      Alert.alert('Quiz Generated! ✨', `AI created ${quizData?.questions?.length || numQuestions} verified questions.`);
     } catch (err) {
-      Alert.alert('Generation Notice', err.message || 'Failed to generate quiz');
-      triggerHaptic('error');
+      Alert.alert('Generation Error', err.response?.data?.message || 'Could not generate quiz from notes.');
     } finally {
       setGenerating(false);
     }
   };
 
-  // 4. Save and Assign Quiz
-  const handlePublishQuiz = async () => {
-    triggerHaptic('success');
-    Alert.alert('Quiz Published', 'Your assessment has been created and assigned to students.');
-    setDraftQuiz(null);
-    setPickedFile(null);
-    setRawText('');
-    if (onQuizCreated) onQuizCreated();
+  // 3. Assign Quiz to Classroom
+  const handleAssignToClass = async () => {
+    if (!generatedQuiz?.id || !selectedClassId) return;
+    try {
+      setAssigning(true);
+      triggerHaptic('medium');
+
+      await apiClient.post(`/teacher/quizzes/${generatedQuiz.id}/assign`, {
+        classroomIds: [selectedClassId],
+        dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        passingScore: 50,
+      });
+
+      triggerHaptic('success');
+      Alert.alert('Assigned! 📢', 'The quiz has been assigned to your classroom with push notifications sent to students.');
+      if (onQuizCreated) onQuizCreated();
+    } catch (err) {
+      Alert.alert('Assign Error', err.response?.data?.message || 'Failed to assign quiz to class.');
+    } finally {
+      setAssigning(false);
+    }
   };
 
+  // ----------------------------------------------------
+  // RENDER: Generated Quiz Preview & Publish
+  // ----------------------------------------------------
+  if (generatedQuiz) {
+    const qList = generatedQuiz.questions || [];
+    return (
+      <View style={[styles.container, { backgroundColor: theme.bg }]}>
+        <Header
+          title="Generated Quiz Preview"
+          subtitle={`${qList.length} Questions Created`}
+          showBack
+          onBack={() => setGeneratedQuiz(null)}
+        />
+
+        <ScrollView contentContainerStyle={styles.scroll}>
+          {/* Quiz Header Card */}
+          <View style={[styles.quizHeroCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+            <Text style={[styles.quizHeroTitle, { color: theme.text }]}>{generatedQuiz.title}</Text>
+            <Text style={[styles.quizHeroMeta, { color: theme.textMuted }]}>
+              {generatedQuiz.subject || subject} • {generatedQuiz.difficulty || difficulty} • {qList.length} MCQs
+            </Text>
+          </View>
+
+          {/* Assign to Classroom Box */}
+          {classrooms.length > 0 && (
+            <View style={[styles.assignBox, { backgroundColor: theme.card, borderColor: `${theme.primary}50` }]}>
+              <Text style={[styles.assignTitle, { color: theme.text }]}>Assign to Classroom</Text>
+              <Text style={[styles.assignSub, { color: theme.textMuted }]}>
+                Select which digital class will receive this assessment:
+              </Text>
+
+              <View style={styles.classChipsRow}>
+                {classrooms.map((cls) => {
+                  const isSelected = selectedClassId === cls.id;
+                  return (
+                    <TouchableOpacity
+                      key={cls.id}
+                      onPress={() => {
+                        triggerHaptic('selection');
+                        setSelectedClassId(cls.id);
+                      }}
+                      style={[
+                        styles.classChip,
+                        {
+                          backgroundColor: isSelected ? theme.primary : theme.cardHover,
+                          borderColor: isSelected ? theme.primary : theme.cardBorder,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.classChipText, { color: isSelected ? '#FFF' : theme.textSecondary }]}>
+                        {cls.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <TouchableOpacity
+                disabled={assigning}
+                onPress={handleAssignToClass}
+                style={[styles.assignSubmitBtn, { backgroundColor: theme.primary }]}
+              >
+                {assigning ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={styles.assignSubmitBtnText}>Publish to Classroom & Alert Students →</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Questions Preview List */}
+          <Text style={[styles.sectionHeading, { color: theme.text }]}>Questions Breakdown</Text>
+
+          {qList.map((q, idx) => (
+            <View
+              key={q.id || idx}
+              style={[styles.questionCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
+            >
+              <Text style={[styles.questionNumber, { color: theme.primary }]}>Question {idx + 1}</Text>
+              <Text style={[styles.questionText, { color: theme.text }]}>{q.question}</Text>
+
+              <View style={styles.optionsGrid}>
+                {(q.options || []).map((opt, i) => {
+                  const optText = typeof opt === 'string' ? opt : opt.text || opt.label;
+                  const isCorrect = String(optText) === String(q.correctAnswer);
+                  return (
+                    <View
+                      key={i}
+                      style={[
+                        styles.optionPill,
+                        {
+                          backgroundColor: isCorrect ? `${theme.success}18` : theme.cardHover,
+                          borderColor: isCorrect ? theme.success : theme.cardBorder,
+                        },
+                      ]}
+                    >
+                      <Text style={{ fontSize: 13, color: isCorrect ? theme.success : theme.textSecondary, fontWeight: isCorrect ? '700' : '400' }}>
+                        {String.fromCharCode(65 + i)}. {optText} {isCorrect ? '✓' : ''}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+
+              {q.explanation ? (
+                <Text style={[styles.explanationText, { color: theme.textMuted }]}>
+                  💡 {q.explanation}
+                </Text>
+              ) : null}
+            </View>
+          ))}
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // ----------------------------------------------------
+  // RENDER: Input Form (Default)
+  // ----------------------------------------------------
   return (
     <View style={[styles.container, { backgroundColor: theme.bg }]}>
       <Header
-        title="Note→Quiz AI"
-        subtitle="Automated Assessment Generator for Educators"
+        title="Note-to-Quiz AI"
+        subtitle="Turn Teacher Notes into Verified Tests"
+        showBack={Boolean(onBack)}
+        onBack={onBack}
       />
 
       <ScrollView contentContainerStyle={styles.scroll}>
-        {/* Banner */}
-        <View
-          style={[
-            styles.banner,
-            { backgroundColor: theme.card, borderColor: theme.cardBorder },
-          ]}
+        {/* Document Upload Hero */}
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={handlePickDocument}
+          style={[styles.pickDocHero, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
         >
-          <Text style={[styles.bannerTitle, { color: theme.text }]}>
-            Transform Lecture Notes into Graded MCQs
+          <Text style={{ fontSize: 32, marginBottom: 8 }}>📄</Text>
+          <Text style={[styles.pickDocTitle, { color: theme.text }]}>
+            {pickedFile ? pickedFile.name : 'Upload Lecture Notes or Textbook Chapter'}
           </Text>
-          <Text style={[styles.bannerSub, { color: theme.textMuted }]}>
-            Upload syllabus documents or photograph student handwritten notes to generate curriculum-aligned questions.
+          <Text style={[styles.pickDocSub, { color: theme.textMuted }]}>
+            {pickedFile ? 'Document attached. Ready to extract MCQs.' : 'Tap to pick PDF, DOCX, or TXT file'}
           </Text>
+        </TouchableOpacity>
+
+        {/* Or Paste Raw Notes */}
+        <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Or Paste Raw Lecture / Syllabus Notes</Text>
+        <TextInput
+          style={[
+            styles.textArea,
+            { backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text },
+          ]}
+          placeholder="Paste lecture key points, definitions, or textbook paragraphs here..."
+          placeholderTextColor={theme.textMuted}
+          multiline
+          numberOfLines={5}
+          value={noteText}
+          onChangeText={setNoteText}
+        />
+
+        {/* Configuration Row */}
+        <View style={styles.configRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Topic / Title</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text }]}
+              placeholder="e.g. Newton Laws of Motion"
+              placeholderTextColor={theme.textMuted}
+              value={topic}
+              onChangeText={setTopic}
+            />
+          </View>
         </View>
 
-        {draftQuiz ? (
-          /* Draft Review View */
-          <View>
-            <View style={styles.reviewHeader}>
-              <Text style={[styles.sectionTitle, { color: theme.text }]}>
-                Draft Review ({draftQuiz.questions.length} Questions)
-              </Text>
-              <TouchableOpacity
-                onPress={() => setDraftQuiz(null)}
-                style={[styles.smallBtn, { borderColor: theme.cardBorder }]}
-              >
-                <Text style={{ color: theme.textMuted, fontSize: 11 }}>Re-generate</Text>
-              </TouchableOpacity>
-            </View>
-
-            {draftQuiz.questions.map((q, idx) => (
-              <View
-                key={idx}
-                style={[
-                  styles.questionCard,
-                  { backgroundColor: theme.card, borderColor: theme.cardBorder },
-                ]}
-              >
-                <Text style={[styles.qNum, { color: theme.primary }]}>Question {idx + 1}</Text>
-                <Text style={[styles.qText, { color: theme.text }]}>{q.question}</Text>
-                <View style={styles.optContainer}>
-                  {q.options.map((opt, oIdx) => (
-                    <Text
-                      key={oIdx}
-                      style={[
-                        styles.optText,
-                        opt === q.correctAnswer
-                          ? { color: theme.success, fontWeight: '700' }
-                          : { color: theme.textMuted },
-                      ]}
-                    >
-                      {opt === q.correctAnswer ? '✓ ' : '• '} {opt}
-                    </Text>
-                  ))}
-                </View>
-              </View>
-            ))}
-
-            <TouchableOpacity
-              style={[styles.publishBtn, { backgroundColor: theme.success }]}
-              onPress={handlePublishQuiz}
-            >
-              <Text style={styles.publishBtnText}>Publish & Assign to Classroom ✓</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          /* Upload / Capture View */
-          <View>
-            <Text style={[styles.sectionTitle, { color: theme.text }]}>
-              Source Study Material
-            </Text>
-
-            <View style={styles.pickerRow}>
-              {/* Document Picker Button */}
-              <TouchableOpacity
-                style={[
-                  styles.pickerCard,
-                  { backgroundColor: theme.card, borderColor: theme.cardBorder },
-                ]}
-                activeOpacity={0.8}
-                onPress={handlePickDocument}
-              >
-                <Text style={styles.pickerIcon}>📄</Text>
-                <Text style={[styles.pickerTitle, { color: theme.text }]}>Pick Document</Text>
-                <Text style={[styles.pickerSub, { color: theme.textMuted }]}>
-                  PDF, DOCX, TXT notes
-                </Text>
-              </TouchableOpacity>
-
-              {/* Camera Photo Button */}
-              <TouchableOpacity
-                style={[
-                  styles.pickerCard,
-                  { backgroundColor: theme.card, borderColor: theme.cardBorder },
-                ]}
-                activeOpacity={0.8}
-                onPress={handleCapturePhoto}
-              >
-                <Text style={styles.pickerIcon}>📷</Text>
-                <Text style={[styles.pickerTitle, { color: theme.text }]}>Snap Handwritten</Text>
-                <Text style={[styles.pickerSub, { color: theme.textMuted }]}>
-                  Capture with camera
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Selected File Indicator */}
-            {pickedFile ? (
-              <View
-                style={[
-                  styles.filePill,
-                  { backgroundColor: `${theme.primary}15`, borderColor: theme.primary },
-                ]}
-              >
-                <Text style={[styles.fileName, { color: theme.primary }]}>
-                  📎 {pickedFile.name}
-                </Text>
-                <TouchableOpacity onPress={() => setPickedFile(null)}>
-                  <Text style={{ color: theme.error, fontWeight: '700' }}>✕</Text>
-                </TouchableOpacity>
-              </View>
-            ) : null}
-
-            {/* Manual Text Input Fallback */}
-            <Text style={[styles.sectionTitle, { color: theme.text, marginTop: 18 }]}>
-              Or Paste Lecture Notes / Text
-            </Text>
+        <View style={styles.configRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Subject</Text>
             <TextInput
-              style={[
-                styles.textArea,
-                {
-                  backgroundColor: theme.inputBg,
-                  borderColor: theme.inputBorder,
-                  color: theme.text,
-                },
-              ]}
-              placeholder="Paste chapter excerpts, definitions, or revision points here..."
+              style={[styles.input, { backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text }]}
+              placeholder="Physics, Chemistry, Biology..."
               placeholderTextColor={theme.textMuted}
-              multiline
-              numberOfLines={6}
-              value={rawText}
-              onChangeText={setRawText}
+              value={subject}
+              onChangeText={setSubject}
             />
-
-            <TouchableOpacity
-              style={[
-                styles.generateBtn,
-                {
-                  backgroundColor:
-                    pickedFile || rawText.trim() ? theme.primary : theme.cardBorder,
-                },
-              ]}
-              disabled={(!pickedFile && !rawText.trim()) || generating}
-              onPress={handleGenerateQuiz}
-            >
-              {generating ? (
-                <ActivityIndicator color="#FFF" />
-              ) : (
-                <Text style={styles.generateBtnText}>✨ Generate Draft Assessment with AI</Text>
-              )}
-            </TouchableOpacity>
           </View>
-        )}
+
+          <View style={{ width: 120 }}>
+            <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Questions</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text, textAlign: 'center' }]}
+              keyboardType="number-pad"
+              value={String(numQuestions)}
+              onChangeText={(v) => setNumQuestions(Number(v) || 10)}
+            />
+          </View>
+        </View>
+
+        {/* Difficulty Chips */}
+        <Text style={[styles.inputLabel, { color: theme.textSecondary }]}>Target Difficulty</Text>
+        <View style={styles.diffRow}>
+          {['EASY', 'MEDIUM', 'HARD'].map((d) => {
+            const isSel = difficulty === d;
+            return (
+              <TouchableOpacity
+                key={d}
+                onPress={() => {
+                  triggerHaptic('selection');
+                  setDifficulty(d);
+                }}
+                style={[
+                  styles.diffChip,
+                  {
+                    backgroundColor: isSel ? theme.primary : theme.card,
+                    borderColor: isSel ? theme.primary : theme.cardBorder,
+                  },
+                ]}
+              >
+                <Text style={{ color: isSel ? '#FFF' : theme.textSecondary, fontWeight: '700', fontSize: 13 }}>
+                  {d}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* Generate Button */}
+        <TouchableOpacity
+          disabled={generating}
+          activeOpacity={0.8}
+          onPress={handleGenerateQuiz}
+          style={[styles.generateBtn, { backgroundColor: theme.primary }]}
+        >
+          {generating ? (
+            <View style={styles.loadingRow}>
+              <ActivityIndicator color="#FFF" size="small" />
+              <Text style={styles.generateBtnText}>Extracting Concepts & Generating MCQs...</Text>
+            </View>
+          ) : (
+            <Text style={styles.generateBtnText}>Generate Assessment with AI ✨</Text>
+          )}
+        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -309,131 +395,170 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scroll: {
-    padding: 18,
-    paddingBottom: 32,
+    padding: 16,
+    paddingBottom: 40,
   },
-  banner: {
-    borderRadius: 16,
-    padding: 18,
-    borderWidth: 1,
+  pickDocHero: {
+    alignItems: 'center',
+    padding: 24,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
     marginBottom: 20,
   },
-  bannerTitle: {
+  pickDocTitle: {
     fontSize: 16,
     fontWeight: '800',
-  },
-  bannerSub: {
-    fontSize: 12,
-    marginTop: 4,
-    lineHeight: 17,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    marginBottom: 12,
-  },
-  pickerRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  pickerCard: {
-    flex: 1,
-    borderRadius: 14,
-    padding: 18,
-    borderWidth: 1,
-    alignItems: 'center',
-  },
-  pickerIcon: {
-    fontSize: 28,
-    marginBottom: 8,
-  },
-  pickerTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  pickerSub: {
-    fontSize: 10,
-    marginTop: 2,
+    marginBottom: 4,
     textAlign: 'center',
   },
-  filePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    marginTop: 12,
+  pickDocSub: {
+    fontSize: 12,
   },
-  fileName: {
+  inputLabel: {
     fontSize: 13,
     fontWeight: '700',
+    marginBottom: 6,
   },
   textArea: {
-    height: 120,
+    minHeight: 100,
     borderRadius: 14,
     borderWidth: 1,
     padding: 14,
-    fontSize: 13,
+    fontSize: 14,
     textAlignVertical: 'top',
+    marginBottom: 16,
+  },
+  configRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 14,
+  },
+  input: {
+    height: 46,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    fontSize: 14,
+  },
+  diffRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 24,
+  },
+  diffChip: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: 'center',
   },
   generateBtn: {
-    height: 50,
-    borderRadius: 12,
+    paddingVertical: 14,
+    borderRadius: 14,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 18,
   },
   generateBtnText: {
     color: '#FFF',
     fontSize: 14,
     fontWeight: '700',
   },
-  reviewHeader: {
+  loadingRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    gap: 8,
   },
-  smallBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
+
+  // Preview Styles
+  quizHeroCard: {
+    padding: 20,
+    borderRadius: 18,
     borderWidth: 1,
+    marginBottom: 16,
   },
-  questionCard: {
-    borderRadius: 14,
-    padding: 16,
-    borderWidth: 1,
-    marginBottom: 12,
-  },
-  qNum: {
-    fontSize: 11,
+  quizHeroTitle: {
+    fontSize: 18,
     fontWeight: '800',
     marginBottom: 4,
   },
-  qText: {
-    fontSize: 14,
-    fontWeight: '700',
-    marginBottom: 10,
-  },
-  optContainer: {
-    gap: 4,
-  },
-  optText: {
+  quizHeroMeta: {
     fontSize: 12,
   },
-  publishBtn: {
-    height: 50,
+  assignBox: {
+    padding: 18,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    marginBottom: 20,
+  },
+  assignTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  assignSub: {
+    fontSize: 12,
+    marginBottom: 12,
+  },
+  classChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 16,
+  },
+  classChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  classChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  assignSubmitBtn: {
+    paddingVertical: 12,
     borderRadius: 12,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 14,
   },
-  publishBtnText: {
+  assignSubmitBtnText: {
     color: '#FFF',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
+  },
+  sectionHeading: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 12,
+  },
+  questionCard: {
+    padding: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 12,
+  },
+  questionNumber: {
+    fontSize: 12,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  questionText: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: '600',
+    marginBottom: 10,
+  },
+  optionsGrid: {
+    gap: 6,
+    marginBottom: 8,
+  },
+  optionPill: {
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  explanationText: {
+    fontSize: 12,
+    lineHeight: 16,
+    marginTop: 4,
   },
 });
