@@ -121,7 +121,7 @@ export const createTestSchema = z.object({
     boardId: z.string().optional(),
     class: z.union([z.string(), z.number()]).transform((v) => String(v)).optional(),
     subjectId: z.string().optional(),
-    chapterId: z.string().min(1, 'Chapter ID is required'),
+    chapterId: z.string().optional().nullable(),
     topicId: z.string().optional().nullable(),
     title: z.string().optional(),
     mode: z.enum(['PRACTICE', 'TEST']).optional(),

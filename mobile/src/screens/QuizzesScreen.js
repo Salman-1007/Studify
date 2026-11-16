@@ -10,6 +10,7 @@ import { useTheme } from '../context/ThemeContext';
 import Header from '../components/Header';
 import apiClient from '../api/client';
 import { triggerHaptic } from '../utils/haptics';
+import { normalizeQuestionList } from '../utils/quizUtils';
 
 export default function QuizzesScreen({ initialTrack = null }) {
   const { theme } = useTheme();
@@ -57,7 +58,8 @@ export default function QuizzesScreen({ initialTrack = null }) {
       triggerHaptic('medium');
       const res = await apiClient.get('/daily-arena/questions').catch(() => null);
 
-      const qs = res?.data?.data?.questions?.length ? res.data.data.questions : sampleQuestions;
+      const rawQs = res?.data?.data?.questions?.length ? res.data.data.questions : sampleQuestions;
+      const qs = normalizeQuestionList(rawQs);
       setActiveQuiz({
         title: initialTrack ? `${initialTrack.name} Exam` : `${subject} Board Mock`,
         questions: qs,
@@ -69,7 +71,7 @@ export default function QuizzesScreen({ initialTrack = null }) {
     } catch {
       setActiveQuiz({
         title: 'Curriculum Practice Mock',
-        questions: sampleQuestions,
+        questions: normalizeQuestionList(sampleQuestions),
       });
       setCurrentIndex(0);
       setSelectedAnswers({});
@@ -103,14 +105,15 @@ export default function QuizzesScreen({ initialTrack = null }) {
 
     questions.forEach((q, idx) => {
       const chosen = selectedAnswers[idx];
-      const isCorrect = chosen === q.correctAnswer;
+      const correctAns = q.correctAnswer || q.correctOption;
+      const isCorrect = chosen === correctAns;
       if (isCorrect) {
         score++;
       } else {
         mistakes.push({
-          question: q.question,
+          question: q.questionText || q.question,
           chosen: chosen || 'Skipped',
-          correct: q.correctAnswer,
+          correct: correctAns,
           explanation: q.explanation,
         });
       }
@@ -242,18 +245,22 @@ export default function QuizzesScreen({ initialTrack = null }) {
               { backgroundColor: theme.card, borderColor: theme.cardBorder },
             ]}
           >
-            <Text style={[styles.questionText, { color: theme.text }]}>{q.question}</Text>
+            <Text style={[styles.questionText, { color: theme.text }]}>
+              {q?.questionText || q?.question || 'Question'}
+            </Text>
           </View>
 
           {/* Options */}
           <View style={styles.optionsList}>
-            {q.options.map((opt, idx) => {
-              const isSelected = selectedAnswers[currentIndex] === opt;
+            {(q?.options || []).map((opt, idx) => {
+              const optKey = opt.key || String.fromCharCode(65 + idx);
+              const optText = opt.text || opt;
+              const isSelected = selectedAnswers[currentIndex] === optKey || selectedAnswers[currentIndex] === optText;
               return (
                 <TouchableOpacity
-                  key={idx}
+                  key={optKey}
                   activeOpacity={0.7}
-                  onPress={() => handleSelectOption(opt)}
+                  onPress={() => handleSelectOption(optKey)}
                   style={[
                     styles.optionButton,
                     {
@@ -277,7 +284,7 @@ export default function QuizzesScreen({ initialTrack = null }) {
                         { color: isSelected ? '#FFF' : theme.textMuted },
                       ]}
                     >
-                      {String.fromCharCode(65 + idx)}
+                      {optKey}
                     </Text>
                   </View>
                   <Text
@@ -289,7 +296,7 @@ export default function QuizzesScreen({ initialTrack = null }) {
                       },
                     ]}
                   >
-                    {opt}
+                    {optText}
                   </Text>
                 </TouchableOpacity>
               );

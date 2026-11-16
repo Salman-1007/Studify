@@ -14,6 +14,7 @@ import {
 import { useTheme } from '../context/ThemeContext';
 import apiClient from '../api/client';
 import { triggerHaptic } from '../utils/haptics';
+import { normalizeQuestion } from '../utils/quizUtils';
 import {
   ShieldIcon,
   ArrowLeftIcon,
@@ -962,33 +963,40 @@ export default function AdminScreen({ onBack }) {
                         </View>
                       </View>
 
-                      <Text style={[styles.questionText, { color: theme.text }]}>{q.question}</Text>
+                      <Text style={[styles.questionText, { color: theme.text }]}>
+                        {q.questionText || q.question}
+                      </Text>
 
                       {/* Options */}
-                      {q.options && typeof q.options === 'object' && (
-                        <View style={styles.optionsBox}>
-                          {Object.entries(q.options).map(([key, optText]) => {
-                            const isCorrect = key.toUpperCase() === (q.correctOption || '').toUpperCase();
-                            return (
-                              <View
-                                key={key}
-                                style={[
-                                  styles.optionRow,
-                                  isCorrect && { backgroundColor: 'rgba(16, 185, 129, 0.1)', borderColor: 'rgba(16, 185, 129, 0.3)' },
-                                ]}
-                              >
-                                <Text style={[styles.optionKey, isCorrect && { color: '#10B981', fontWeight: '800' }]}>
-                                  {key.toUpperCase()}:
-                                </Text>
-                                <Text style={[styles.optionVal, { color: isCorrect ? '#10B981' : theme.textSecondary }]}>
-                                  {optText}
-                                </Text>
-                                {isCorrect && <Text style={{ color: '#10B981', fontSize: 11, fontWeight: '700' }}>✓ Correct</Text>}
-                              </View>
-                            );
-                          })}
-                        </View>
-                      )}
+                      {(() => {
+                        const norm = normalizeQuestion(q);
+                        const correctVal = (q.correctAnswer || q.correctOption || '').toUpperCase();
+                        if (!norm?.options?.length) return null;
+                        return (
+                          <View style={styles.optionsBox}>
+                            {norm.options.map((opt) => {
+                              const isCorrect = opt.key.toUpperCase() === correctVal;
+                              return (
+                                <View
+                                  key={opt.key}
+                                  style={[
+                                    styles.optionRow,
+                                    isCorrect && { backgroundColor: 'rgba(16, 185, 129, 0.1)', borderColor: 'rgba(16, 185, 129, 0.3)' },
+                                  ]}
+                                >
+                                  <Text style={[styles.optionKey, isCorrect && { color: '#10B981', fontWeight: '800' }]}>
+                                    {opt.key}:
+                                  </Text>
+                                  <Text style={[styles.optionVal, { color: isCorrect ? '#10B981' : theme.textSecondary }]}>
+                                    {opt.text}
+                                  </Text>
+                                  {isCorrect && <Text style={{ color: '#10B981', fontSize: 11, fontWeight: '700' }}>✓ Correct</Text>}
+                                </View>
+                              );
+                            })}
+                          </View>
+                        );
+                      })()}
 
                       {/* Action buttons */}
                       <View style={styles.actionBtnRow}>

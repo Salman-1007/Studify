@@ -29,13 +29,27 @@ export const generateTest = asyncHandler(async(req, res) => {
     }
 
     const subjectId = parsed.subjectId || chapter?.subjectId;
-    const subject = chapter?.subject || await prisma.curriculumSubject.findUnique({
+    const subject = chapter?.subject || (subjectId ? await prisma.curriculumSubject.findUnique({
         where: { id: subjectId },
         include: { board: true },
-    });
+    }) : null);
     if (!subject) throw new ApiError(404, 'Subject not found');
 
-    // Filter approved questions only!
+    if (!chapter) {
+        chapter = await prisma.curriculumChapter.findFirst({
+            where: { subjectId: subject.id, questionItems: { some: { status: 'APPROVED' } } },
+            include: { subject: { include: { board: true } } },
+        }) || await prisma.curriculumChapter.findFirst({
+            where: { subjectId: subject.id },
+            include: { subject: { include: { board: true } } },
+        });
+    }
+
+    if (!chapter) {
+        throw new ApiError(404, 'No curriculum chapters found for this subject');
+    }
+
+    // Filter approved questions
     const where = {
         chapterId: chapter.id,
         status: 'APPROVED',
@@ -43,7 +57,7 @@ export const generateTest = asyncHandler(async(req, res) => {
     if (parsed.topicId) where.topicId = parsed.topicId;
     if (parsed.difficulty && parsed.difficulty !== 'MIXED') where.difficulty = parsed.difficulty;
 
-    const eligibleQuestions = await prisma.questionBankItem.findMany({
+    let eligibleQuestions = await prisma.questionBankItem.findMany({
         where,
         select: {
             id: true,
@@ -59,7 +73,29 @@ export const generateTest = asyncHandler(async(req, res) => {
     });
 
     if (eligibleQuestions.length === 0) {
-        throw new ApiError(404, 'No approved questions available for this chapter yet');
+        // Fallback to any approved questions in this subject
+        eligibleQuestions = await prisma.questionBankItem.findMany({
+            where: {
+                subjectId: subject.id,
+                status: 'APPROVED',
+            },
+            take: 30,
+            select: {
+                id: true,
+                questionText: true,
+                optionA: true,
+                optionB: true,
+                optionC: true,
+                optionD: true,
+                difficulty: true,
+                topicId: true,
+                topic: { select: { topicName: true } },
+            },
+        });
+    }
+
+    if (eligibleQuestions.length === 0) {
+        throw new ApiError(404, 'No approved questions available for this subject or chapter yet');
     }
 
     // Shuffle and pick requested number

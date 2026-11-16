@@ -14,6 +14,7 @@ import { useTheme } from '../context/ThemeContext';
 import Header from '../components/Header';
 import apiClient from '../api/client';
 import { triggerHaptic } from '../utils/haptics';
+import { normalizeQuestionList } from '../utils/quizUtils';
 import {
   FlameIcon,
   ClockIcon,
@@ -145,9 +146,12 @@ export default function DailyArenaScreen({ onBack }) {
       });
 
       const data = res.data?.data;
-      if (data?.questions?.length) {
+      const rawQs = data?.questions || [];
+      const normalizedQs = normalizeQuestionList(rawQs);
+
+      if (normalizedQs.length) {
         setActiveAttempt(data);
-        setQuestions(data.questions);
+        setQuestions(normalizedQs);
         setCurrentIndex(0);
         setSelectedAnswers({});
         setFlaggedQuestions({});
@@ -272,18 +276,8 @@ export default function DailyArenaScreen({ onBack }) {
     const currentQ = questions[currentIndex];
     const totalQ = questions.length;
     const answeredCount = Object.keys(selectedAnswers).length;
-    const isFlagged = !!flaggedQuestions[currentIndex];
-
-    // Options can be string array or object array [{key, text}]
-    const options = Array.isArray(currentQ?.options)
-      ? currentQ.options.map((opt, i) => {
-          if (typeof opt === 'string') {
-            const letter = String.fromCharCode(65 + i);
-            return { key: letter, text: opt };
-          }
-          return { key: opt.key || String.fromCharCode(65 + i), text: opt.text || opt.label || '' };
-        })
-      : [];
+    const isFlagged = Boolean(flaggedQuestions[currentIndex]);
+    const options = currentQ?.options || [];
 
     return (
       <View style={[styles.container, { backgroundColor: theme.bg }]}>
@@ -368,7 +362,7 @@ export default function DailyArenaScreen({ onBack }) {
           {/* Question Card */}
           <View style={[styles.questionCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
             <Text style={[styles.questionPrompt, { color: theme.text }]}>
-              {currentQ?.question}
+              {currentQ?.questionText || currentQ?.question || 'Question'}
             </Text>
           </View>
 
@@ -411,12 +405,15 @@ export default function DailyArenaScreen({ onBack }) {
                       styles.optionContentText,
                       {
                         color: isSelected ? theme.text : theme.textSecondary,
-                        fontWeight: isSelected ? '600' : '400',
+                        fontWeight: isSelected ? '700' : '400',
                       },
                     ]}
                   >
                     {opt.text}
                   </Text>
+                  {isSelected && (
+                    <Text style={{ color: theme.primary, fontWeight: 'bold', fontSize: 16 }}>✓</Text>
+                  )}
                 </TouchableOpacity>
               );
             })}
@@ -506,7 +503,7 @@ export default function DailyArenaScreen({ onBack }) {
     const percentage = submitResult.percentage || Math.round((score / total) * 100);
     const pointsAwarded = submitResult.pointsAwarded || 50;
     const streak = submitResult.streakCount || arenaStatus?.streakCount || 1;
-    const reviewItems = submitResult.review || [];
+    const reviewItems = submitResult.review || submitResult.reviewQuestions || [];
 
     return (
       <View style={[styles.container, { backgroundColor: theme.bg }]}>
@@ -596,7 +593,9 @@ export default function DailyArenaScreen({ onBack }) {
                     <Text style={[styles.reviewIndexText, { color: theme.textMuted }]}>Q{idx + 1}</Text>
                   </View>
 
-                  <Text style={[styles.reviewQuestionText, { color: theme.text }]}>{item.question}</Text>
+                  <Text style={[styles.reviewQuestionText, { color: theme.text }]}>
+                    {item.questionText || item.question}
+                  </Text>
 
                   <View style={styles.reviewAnswersGrid}>
                     <Text style={[styles.answerLabel, { color: theme.textMuted }]}>

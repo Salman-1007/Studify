@@ -13,6 +13,7 @@ import { useTheme } from '../context/ThemeContext';
 import Header from '../components/Header';
 import apiClient from '../api/client';
 import { triggerHaptic } from '../utils/haptics';
+import { normalizeQuestionList, normalizeQuestion } from '../utils/quizUtils';
 import {
   TestsIcon,
   ClassroomsIcon,
@@ -31,6 +32,9 @@ export default function StandardTestsScreen({ onBack }) {
   const [selectedTrack, setSelectedTrack] = useState(null); // 'MDCAT' | 'ECAT' | 'FBISE' | 'PTB'
   const [selectedGrade, setSelectedGrade] = useState('9');
   const [selectedSubject, setSelectedSubject] = useState(null);
+  const [chaptersList, setChaptersList] = useState([]);
+  const [selectedChapter, setSelectedChapter] = useState(null);
+  const [loadingChapters, setLoadingChapters] = useState(false);
   const [questionCount, setQuestionCount] = useState(15);
   const [difficulty, setDifficulty] = useState('MIXED'); // 'EASY' | 'MEDIUM' | 'HARD' | 'MIXED'
 
@@ -100,6 +104,29 @@ export default function StandardTestsScreen({ onBack }) {
     },
   ];
 
+  // Fetch chapters for chosen subject
+  const loadChapters = useCallback(async (subjectId) => {
+    if (!subjectId) {
+      setChaptersList([]);
+      setSelectedChapter(null);
+      return;
+    }
+    try {
+      setLoadingChapters(true);
+      const res = await apiClient.get('/curriculum/chapters', {
+        params: { subjectId },
+      });
+      const chs = res.data?.data?.chapters || res.data?.data || [];
+      setChaptersList(chs);
+      setSelectedChapter(null); // 'All Chapters' by default
+    } catch {
+      setChaptersList([]);
+      setSelectedChapter(null);
+    } finally {
+      setLoadingChapters(false);
+    }
+  }, []);
+
   // Fetch subjects for chosen grade/track
   const loadSubjects = useCallback(async (grade) => {
     try {
@@ -111,21 +138,28 @@ export default function StandardTestsScreen({ onBack }) {
       setSubjectsList(subs);
       if (subs.length > 0) {
         setSelectedSubject(subs[0]);
+        loadChapters(subs[0].id);
+      } else {
+        setSelectedSubject(null);
+        setChaptersList([]);
       }
     } catch (err) {
       console.warn('[StandardTests] Could not fetch subjects:', err.message);
       // Fallback subjects
-      setSubjectsList([
+      const fallback = [
         { id: 'sub-phy', name: 'Physics' },
         { id: 'sub-chem', name: 'Chemistry' },
         { id: 'sub-bio', name: 'Biology' },
         { id: 'sub-math', name: 'Mathematics' },
         { id: 'sub-eng', name: 'English' },
-      ]);
+      ];
+      setSubjectsList(fallback);
+      setSelectedSubject(fallback[0]);
+      setChaptersList([]);
     } finally {
       setLoadingSubjects(false);
     }
-  }, []);
+  }, [loadChapters]);
 
   // Fetch past test history
   const loadHistory = useCallback(async () => {
@@ -186,6 +220,7 @@ export default function StandardTestsScreen({ onBack }) {
       const payload = {
         classGrade: selectedGrade,
         subjectId: selectedSubject?.id,
+        chapterId: selectedChapter?.id || undefined,
         questionCount,
         difficulty,
       };
@@ -193,11 +228,13 @@ export default function StandardTestsScreen({ onBack }) {
       const res = await apiClient
         .post('/tests', payload)
         .catch(() => apiClient.post('/standard-tests', payload));
-      const data = res.data?.data;
+      const data = res.data?.data?.attempt || res.data?.data;
+      const rawQs = data?.questions || data?.attempt?.questions || [];
+      const normalizedQs = normalizeQuestionList(rawQs);
 
-      if (data?.questions?.length) {
+      if (normalizedQs.length) {
         setActiveAttempt(data);
-        setQuestions(data.questions);
+        setQuestions(normalizedQs);
         setCurrentIndex(0);
         setSelectedAnswers({});
         setFlaggedQuestions({});
@@ -205,7 +242,7 @@ export default function StandardTestsScreen({ onBack }) {
         setViewMode('runner');
         triggerHaptic('success');
       } else {
-        Alert.alert('Notice', 'No questions available for this subject criteria currently. Please try another subject.');
+        Alert.alert('Notice', 'No questions available for this subject or chapter yet. Please select another subject.');
       }
     } catch (err) {
       Alert.alert('Error', err.response?.data?.message || 'Could not start exam. Please try again.');
@@ -302,17 +339,8 @@ export default function StandardTestsScreen({ onBack }) {
     const currentQ = questions[currentIndex];
     const totalQ = questions.length;
     const answeredCount = Object.keys(selectedAnswers).length;
-    const isFlagged = !!flaggedQuestions[currentIndex];
-
-    const options = Array.isArray(currentQ?.options)
-      ? currentQ.options.map((opt, i) => {
-          if (typeof opt === 'string') {
-            const letter = String.fromCharCode(65 + i);
-            return { key: letter, text: opt };
-          }
-          return { key: opt.key || String.fromCharCode(65 + i), text: opt.text || opt.label || '' };
-        })
-      : [];
+    const isFlagged = Boolean(flaggedQuestions[currentIndex]);
+    const options = currentQ?.options || [];
 
     return (
       <View style={[styles.container, { backgroundColor: theme.bg }]}>
@@ -378,7 +406,24 @@ export default function StandardTestsScreen({ onBack }) {
 
           {/* Question Box */}
           <View style={[styles.questionCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-            <Text style={[styles.questionPrompt, { color: theme.text }]}>{currentQ?.question}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <View style={[styles.optionKeyBadge, { backgroundColor: `${theme.primary}18`, width: 'auto', paddingHorizontal: 10, height: 26, borderRadius: 6 }]}>
+                <Text style={{ color: theme.primary, fontSize: 12, fontWeight: '700' }}>
+                  Question {currentIndex + 1} of {totalQ}
+                </Text>
+              </View>
+              {Boolean(currentQ?.difficulty) && (
+                <View style={[styles.optionKeyBadge, { backgroundColor: theme.cardHover, width: 'auto', paddingHorizontal: 8, height: 24, borderRadius: 6 }]}>
+                  <Text style={{ color: theme.textSecondary, fontSize: 11, fontWeight: '600' }}>
+                    {currentQ.difficulty}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            <Text style={[styles.questionPrompt, { color: theme.text }]}>
+              {currentQ?.questionText || currentQ?.question || 'Question'}
+            </Text>
           </View>
 
           {/* Options */}
@@ -413,12 +458,15 @@ export default function StandardTestsScreen({ onBack }) {
                       styles.optionContentText,
                       {
                         color: isSelected ? theme.text : theme.textSecondary,
-                        fontWeight: isSelected ? '600' : '400',
+                        fontWeight: isSelected ? '700' : '400',
                       },
                     ]}
                   >
                     {opt.text}
                   </Text>
+                  {isSelected && (
+                    <Text style={{ color: theme.primary, fontWeight: 'bold', fontSize: 16 }}>✓</Text>
+                  )}
                 </TouchableOpacity>
               );
             })}
@@ -538,6 +586,96 @@ export default function StandardTestsScreen({ onBack }) {
               </Text>
             )}
           </View>
+
+          {/* Detailed Question Review Breakdown */}
+          {testResult?.questions?.length > 0 && (
+            <View style={{ marginTop: 16 }}>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: theme.text, marginBottom: 12 }}>
+                Detailed Question Review ({testResult.questions.length})
+              </Text>
+              {testResult.questions.map((rq, idx) => {
+                const norm = normalizeQuestion(rq);
+                const isCorrect = rq.isCorrect || (rq.selectedOption && rq.selectedOption === (rq.correctAnswer || rq.correctOption));
+                const isSkipped = !rq.selectedOption;
+                const statusColor = isSkipped ? theme.accentGold : isCorrect ? theme.success : theme.error;
+                const statusLabel = isSkipped ? 'Skipped' : isCorrect ? 'Correct' : 'Incorrect';
+
+                return (
+                  <View
+                    key={rq.questionId || idx}
+                    style={[
+                      styles.questionCard,
+                      { backgroundColor: theme.card, borderColor: theme.cardBorder, marginBottom: 14 },
+                    ]}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: theme.textMuted }}>
+                        Question {idx + 1}
+                      </Text>
+                      <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4, backgroundColor: `${statusColor}20` }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: statusColor }}>
+                          {statusLabel}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: theme.text, lineHeight: 20, marginBottom: 10 }}>
+                      {norm?.questionText}
+                    </Text>
+
+                    <View style={{ gap: 6, marginBottom: 8 }}>
+                      {(norm?.options || []).map((opt) => {
+                        const wasChosen = rq.selectedOption === opt.key;
+                        const wasCorrect = (rq.correctAnswer || rq.correctOption) === opt.key;
+                        let optBorder = theme.cardBorder;
+                        let optBg = theme.cardHover;
+                        if (wasCorrect) {
+                          optBorder = theme.success;
+                          optBg = `${theme.success}15`;
+                        } else if (wasChosen && !isCorrect) {
+                          optBorder = theme.error;
+                          optBg = `${theme.error}15`;
+                        }
+
+                        return (
+                          <View
+                            key={opt.key}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              padding: 8,
+                              borderRadius: 8,
+                              borderWidth: 1,
+                              borderColor: optBorder,
+                              backgroundColor: optBg,
+                              gap: 8,
+                            }}
+                          >
+                            <Text style={{ fontWeight: '700', fontSize: 12, color: wasCorrect ? theme.success : theme.textMuted, width: 20 }}>
+                              {opt.key}
+                            </Text>
+                            <Text style={{ flex: 1, fontSize: 13, color: theme.text }}>
+                              {opt.text}
+                            </Text>
+                            {wasCorrect && <Text style={{ color: theme.success, fontWeight: 'bold', fontSize: 12 }}>✓ Correct</Text>}
+                            {wasChosen && !wasCorrect && <Text style={{ color: theme.error, fontWeight: 'bold', fontSize: 12 }}>✕ Chosen</Text>}
+                          </View>
+                        );
+                      })}
+                    </View>
+
+                    {Boolean(rq.explanation) && (
+                      <View style={{ padding: 8, borderRadius: 6, backgroundColor: `${theme.primary}10`, marginTop: 4 }}>
+                        <Text style={{ fontSize: 12, color: theme.textSecondary }}>
+                          💡 <Text style={{ fontWeight: '700' }}>Explanation:</Text> {rq.explanation}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </View>
+          )}
 
           {/* Action Buttons */}
           <View style={styles.actionRow}>
@@ -696,6 +834,7 @@ export default function StandardTestsScreen({ onBack }) {
                       onPress={() => {
                         triggerHaptic('selection');
                         setSelectedSubject(sub);
+                        loadChapters(sub.id);
                       }}
                       style={[
                         styles.chip,
@@ -707,6 +846,59 @@ export default function StandardTestsScreen({ onBack }) {
                     >
                       <Text style={[styles.chipText, { color: isSelected ? '#FFF' : theme.textSecondary }]}>
                         {sub.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
+          </View>
+
+          {/* Chapter Selector */}
+          <View style={styles.configSection}>
+            <Text style={[styles.configSectionTitle, { color: theme.text }]}>Select Chapter</Text>
+            {loadingChapters ? (
+              <ActivityIndicator color={theme.primary} />
+            ) : (
+              <View style={styles.chipsRow}>
+                <TouchableOpacity
+                  onPress={() => {
+                    triggerHaptic('selection');
+                    setSelectedChapter(null);
+                  }}
+                  style={[
+                    styles.chip,
+                    {
+                      backgroundColor: selectedChapter === null ? theme.primary : theme.card,
+                      borderColor: selectedChapter === null ? theme.primary : theme.cardBorder,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.chipText, { color: selectedChapter === null ? '#FFF' : theme.textSecondary }]}>
+                    All Chapters (Subject Mock)
+                  </Text>
+                </TouchableOpacity>
+
+                {chaptersList.map((ch) => {
+                  const isSelected = selectedChapter?.id === ch.id;
+                  const chLabel = `Ch ${ch.chapterNumber || ''}: ${ch.title || ch.chapterName || 'Chapter'}`;
+                  return (
+                    <TouchableOpacity
+                      key={ch.id}
+                      onPress={() => {
+                        triggerHaptic('selection');
+                        setSelectedChapter(ch);
+                      }}
+                      style={[
+                        styles.chip,
+                        {
+                          backgroundColor: isSelected ? theme.primary : theme.card,
+                          borderColor: isSelected ? theme.primary : theme.cardBorder,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.chipText, { color: isSelected ? '#FFF' : theme.textSecondary }]}>
+                        {chLabel}
                       </Text>
                     </TouchableOpacity>
                   );

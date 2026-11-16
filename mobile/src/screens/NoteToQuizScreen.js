@@ -14,6 +14,7 @@ import { useTheme } from '../context/ThemeContext';
 import Header from '../components/Header';
 import apiClient from '../api/client';
 import { triggerHaptic } from '../utils/haptics';
+import { normalizeQuestion } from '../utils/quizUtils';
 
 export default function NoteToQuizScreen({ onQuizCreated, onBack }) {
   const { theme } = useTheme();
@@ -218,44 +219,48 @@ export default function NoteToQuizScreen({ onQuizCreated, onBack }) {
           {/* Questions Preview List */}
           <Text style={[styles.sectionHeading, { color: theme.text }]}>Questions Breakdown</Text>
 
-          {qList.map((q, idx) => (
-            <View
-              key={q.id || idx}
-              style={[styles.questionCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
-            >
-              <Text style={[styles.questionNumber, { color: theme.primary }]}>Question {idx + 1}</Text>
-              <Text style={[styles.questionText, { color: theme.text }]}>{q.question}</Text>
+          {qList.map((rawQ, idx) => {
+            const q = normalizeQuestion(rawQ);
+            return (
+              <View
+                key={q.id || idx}
+                style={[styles.questionCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
+              >
+                <Text style={[styles.questionNumber, { color: theme.primary }]}>Question {idx + 1}</Text>
+                <Text style={[styles.questionText, { color: theme.text }]}>{q.questionText || q.question}</Text>
 
-              <View style={styles.optionsGrid}>
-                {(q.options || []).map((opt, i) => {
-                  const optText = typeof opt === 'string' ? opt : opt.text || opt.label;
-                  const isCorrect = String(optText) === String(q.correctAnswer);
-                  return (
-                    <View
-                      key={i}
-                      style={[
-                        styles.optionPill,
-                        {
-                          backgroundColor: isCorrect ? `${theme.success}18` : theme.cardHover,
-                          borderColor: isCorrect ? theme.success : theme.cardBorder,
-                        },
-                      ]}
-                    >
-                      <Text style={{ fontSize: 13, color: isCorrect ? theme.success : theme.textSecondary, fontWeight: isCorrect ? '700' : '400' }}>
-                        {String.fromCharCode(65 + i)}. {optText} {isCorrect ? '✓' : ''}
-                      </Text>
-                    </View>
-                  );
-                })}
+                <View style={styles.optionsGrid}>
+                  {(q.options || []).map((opt) => {
+                    const optText = opt.text || opt;
+                    const optKey = opt.key;
+                    const isCorrect = String(optKey) === String(q.correctAnswer) || String(optText) === String(q.correctAnswer);
+                    return (
+                      <View
+                        key={optKey}
+                        style={[
+                          styles.optionPill,
+                          {
+                            backgroundColor: isCorrect ? `${theme.success}18` : theme.cardHover,
+                            borderColor: isCorrect ? theme.success : theme.cardBorder,
+                          },
+                        ]}
+                      >
+                        <Text style={{ fontSize: 13, color: isCorrect ? theme.success : theme.textSecondary, fontWeight: isCorrect ? '700' : '400' }}>
+                          {optKey}. {optText} {isCorrect ? '✓' : ''}
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+
+                {q.explanation ? (
+                  <Text style={[styles.explanationText, { color: theme.textMuted }]}>
+                    💡 {q.explanation}
+                  </Text>
+                ) : null}
               </View>
-
-              {q.explanation ? (
-                <Text style={[styles.explanationText, { color: theme.textMuted }]}>
-                  💡 {q.explanation}
-                </Text>
-              ) : null}
-            </View>
-          ))}
+            );
+          })}
         </ScrollView>
       </View>
     );
