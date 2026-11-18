@@ -14,10 +14,11 @@ import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { triggerHaptic } from '../utils/haptics';
 import StudifyLogo from '../components/StudifyLogo';
+import { SunIcon, MoonIcon } from '../components/Icons';
 
 export default function LoginScreen({ onNavigateSignup }) {
   const { login } = useAuth();
-  const { theme } = useTheme();
+  const { theme, isDark, setThemePreference } = useTheme();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -67,6 +68,30 @@ export default function LoginScreen({ onNavigateSignup }) {
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
+        {/* Quick Theme Switcher */}
+        <View style={styles.topThemeRow}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => {
+              triggerHaptic('light');
+              setThemePreference(isDark ? 'light' : 'dark');
+            }}
+            style={[
+              styles.themeToggleBtn,
+              {
+                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
+                borderColor: theme.cardBorder,
+              },
+            ]}
+          >
+            {isDark ? (
+              <SunIcon size={18} color="#F59E0B" />
+            ) : (
+              <MoonIcon size={18} color="#6366F1" />
+            )}
+          </TouchableOpacity>
+        </View>
+
         {/* Brand Hero */}
         <View style={styles.heroSection}>
           <StudifyLogo size={68} style={{ marginBottom: 12 }} />
@@ -190,6 +215,19 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     padding: 22,
+  },
+  topThemeRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: 4,
+  },
+  themeToggleBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   heroSection: {
     alignItems: 'center',

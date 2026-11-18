@@ -1,23 +1,79 @@
 import React from 'react';
-import { StyleSheet, View, Text } from 'react-native';
+import { StyleSheet, View, Text, TouchableOpacity } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 import StudifyLogo from './StudifyLogo';
+import { ArrowLeftIcon, SunIcon, MoonIcon } from './Icons';
+import { triggerHaptic } from '../utils/haptics';
 
-export default function Header({ title, subtitle, rightElement }) {
-  const { theme } = useTheme();
+export default function Header({
+  title,
+  subtitle,
+  rightElement,
+  showBack = false,
+  onBack,
+  showThemeToggle = true,
+}) {
+  const { theme, isDark, setThemePreference } = useTheme();
+
+  const handleToggleTheme = () => {
+    triggerHaptic('light');
+    setThemePreference(isDark ? 'light' : 'dark');
+  };
 
   return (
     <View style={[styles.header, { backgroundColor: theme.bg, borderBottomColor: theme.cardBorder }]}>
       <View style={styles.leftContainer}>
-        <StudifyLogo size={36} />
-        <View>
-          <Text style={[styles.title, { color: theme.text }]}>{title || 'Studify'}</Text>
-          {subtitle ? (
-            <Text style={[styles.subtitle, { color: theme.textMuted }]}>{subtitle}</Text>
-          ) : null}
+        {showBack ? (
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={onBack}
+            style={[
+              styles.backBtn,
+              {
+                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
+                borderColor: theme.cardBorder,
+              },
+            ]}
+          >
+            <ArrowLeftIcon size={18} color={theme.text} />
+          </TouchableOpacity>
+        ) : (
+          <StudifyLogo size={36} />
+        )}
+        <View style={styles.titleBox}>
+          <Text numberOfLines={1} style={[styles.title, { color: theme.text }]}>
+            {title || 'Studify'}
+          </Text>
+          {Boolean(subtitle) && (
+            <Text numberOfLines={1} style={[styles.subtitle, { color: theme.textMuted }]}>
+              {subtitle}
+            </Text>
+          )}
         </View>
       </View>
-      {rightElement ? <View style={styles.rightContainer}>{rightElement}</View> : null}
+
+      <View style={styles.rightContainer}>
+        {showThemeToggle && (
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={handleToggleTheme}
+            style={[
+              styles.themeToggleBtn,
+              {
+                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
+                borderColor: theme.cardBorder,
+              },
+            ]}
+          >
+            {isDark ? (
+              <SunIcon size={18} color="#F59E0B" />
+            ) : (
+              <MoonIcon size={18} color="#6366F1" />
+            )}
+          </TouchableOpacity>
+        )}
+        {rightElement}
+      </View>
     </View>
   );
 }
@@ -27,29 +83,30 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
   },
   leftContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
+    flex: 1,
+    paddingRight: 8,
   },
-  logoBadge: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
+  titleBox: {
+    flex: 1,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  logoText: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '800',
-  },
   title: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
     letterSpacing: -0.3,
   },
@@ -61,5 +118,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  themeToggleBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

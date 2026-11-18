@@ -63,10 +63,11 @@ export default function ClassroomsScreen({ onOpenChat }) {
       setSelectedClass(cls);
 
       const res = await apiClient.get(`/classrooms/${cls.id}`);
-      const detail = res.data?.data?.classroom || res.data?.data || cls;
+      const payload = res.data?.data || {};
+      const detail = payload.classroom || payload || cls;
       setSelectedClass(detail);
-      setClassAnnouncements(detail.announcements || []);
-      setClassAssignments(detail.assignments || []);
+      setClassAnnouncements(payload.announcements || detail.announcements || []);
+      setClassAssignments(payload.assignments || detail.assignments || []);
     } catch (err) {
       console.warn('[Classrooms] Detail error:', err.message);
     }
@@ -129,7 +130,8 @@ export default function ClassroomsScreen({ onOpenChat }) {
 
       const formattedAnswers = assignmentQuestions.map((q, idx) => ({
         questionId: q.id,
-        selectedOption: assignmentAnswers[idx] || null,
+        answer: assignmentAnswers[idx] || '',
+        selectedOption: assignmentAnswers[idx] || '',
       }));
 
       const res = await apiClient.post(`/classrooms/assignments/${takingAssignment.id}/submit`, {
@@ -442,7 +444,7 @@ export default function ClassroomsScreen({ onOpenChat }) {
               Ask your teacher for the 6-character join code (e.g., CLS-93A87E).
             </Text>
 
-            {error && <Text style={[styles.errorText, { color: theme.error }]}>{error}</Text>}
+            {!!error && <Text style={[styles.errorText, { color: theme.error }]}>{error}</Text>}
 
             <TextInput
               style={[styles.modalInput, { backgroundColor: theme.inputBg, color: theme.text, borderColor: theme.inputBorder }]}

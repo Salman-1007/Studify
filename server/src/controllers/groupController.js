@@ -25,20 +25,147 @@ const requireMembership = async(groupId, userId) => {
 };
 
 export const createGroup = asyncHandler(async(req, res) => {
-    const { name, description, subject, privacy } = req.body;
+    const { name, description, subject, privacy, memberIds } = req.body;
+    
+    // Prepare initial members list (creator is OWNER, selected contacts are MEMBER)
+    const membersCreate = [{ userId: req.user.id, role: 'OWNER' }];
+    if (Array.isArray(memberIds)) {
+        for (const uid of memberIds) {
+            if (uid && uid !== req.user.id && !membersCreate.some((m) => m.userId === uid)) {
+                membersCreate.push({ userId: uid, role: 'MEMBER' });
+            }
+        }
+    }
+
     const group = await prisma.studyGroup.create({
         data: {
             name,
             description,
             subject,
-            privacy,
+            privacy: privacy || 'PRIVATE',
             joinCode: genJoinCode(),
             ownerId: req.user.id,
-            members: { create: { userId: req.user.id, role: 'OWNER' } },
+            members: { create: membersCreate },
         },
-        include: { members: true },
+        include: {
+            members: {
+                include: {
+                    user: { select: { id: true, name: true, username: true, avatarUrl: true } }
+                }
+            },
+            _count: { select: { members: true } },
+        },
     });
     ok(res, { group }, 201);
+});
+
+export const getMyGroups = asyncHandler(async(req, res) => {
+    const q = req.query.q || '';
+    const groups = await prisma.studyGroup.findMany({
+        where: {
+            members: {
+                some: { userId: req.user.id }
+            },
+            ...(q ? { name: { contains: q, mode: 'insensitive' } } : {})
+        },
+        include: {
+            members: {
+                include: {
+                    user: { select: { id: true, name: true, username: true, avatarUrl: true } }
+                }
+            },
+            _count: { select: { members: true } },
+            messages: {
+                orderBy: { createdAt: 'desc' },
+                take: 1,
+                include: {
+                    sender: { select: { id: true, name: true, username: true } }
+                }
+            }
+        },
+        orderBy: { updatedAt: 'desc' }
+    });
+    ok(res, { groups });
+});
+
+export const joinGroupByCode = asyncHandler(async(req, res) => {
+    const { code } = req.body;
+    if (!code || typeof code !== 'string') {
+        throw new ApiError(400, 'Valid join code is required');
+    }
+    const cleanCode = code.trim().toUpperCase();
+    const group = await prisma.studyGroup.findFirst({
+        where: { joinCode: cleanCode },
+        include: {
+            members: {
+                include: {
+                    user: { select: { id: true, name: true, username: true, avatarUrl: true } }
+                }
+            },
+            _count: { select: { members: true } }
+        }
+    });
+    if (!group) {
+        throw new ApiError(404, 'No group found with this invite code');
+    }
+
+    const isMember = group.members.some((m) => m.userId === req.user.id);
+    if (!isMember) {
+        await prisma.groupMember.create({
+            data: {
+                groupId: group.id,
+                userId: req.user.id,
+                role: 'MEMBER'
+            }
+        });
+        await prisma.notification.create({
+            data: {
+                userId: group.ownerId,
+                type: 'GROUP_JOIN',
+                message: `${req.user.name || 'A student'} joined ${group.name} via invite code`
+            }
+        });
+    }
+
+    const updatedGroup = await prisma.studyGroup.findUnique({
+        where: { id: group.id },
+        include: {
+            members: {
+                include: {
+                    user: { select: { id: true, name: true, username: true, avatarUrl: true } }
+                }
+            },
+            _count: { select: { members: true } }
+        }
+    });
+
+    ok(res, { group: updatedGroup, joined: !isMember });
+});
+
+export const addMembersToGroup = asyncHandler(async(req, res) => {
+    const membership = await requireMembership(req.params.id, req.user.id);
+    if (membership.role !== 'OWNER' && membership.role !== 'MODERATOR') {
+        throw new ApiError(403, 'Only group owner or moderator can add members directly');
+    }
+    const { userIds } = req.body;
+    if (!Array.isArray(userIds) || userIds.length === 0) {
+        throw new ApiError(400, 'userIds array is required');
+    }
+    const added = [];
+    for (const uid of userIds) {
+        if (!uid) continue;
+        const existing = await prisma.groupMember.findUnique({
+            where: { groupId_userId: { groupId: req.params.id, userId: uid } }
+        });
+        if (!existing) {
+            const member = await prisma.groupMember.create({
+                data: { groupId: req.params.id, userId: uid, role: 'MEMBER' },
+                include: { user: { select: { id: true, name: true, username: true, avatarUrl: true } } }
+            });
+            added.push(member);
+        }
+    }
+    ok(res, { added, count: added.length });
 });
 
 export const searchGroups = asyncHandler(async(req, res) => {

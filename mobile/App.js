@@ -29,12 +29,13 @@ import StudyHubScreen from './src/screens/StudyHubScreen';
 import ClassroomsScreen from './src/screens/ClassroomsScreen';
 import WhatsAppChatsScreen from './src/screens/WhatsAppChatsScreen';
 import LeaderboardScreen from './src/screens/LeaderboardScreen';
-import ProfileScreen from './src/screens/ProfileScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
 import AdminScreen from './src/screens/AdminScreen';
 
 // Teacher Screens
 import TeacherDashboardScreen from './src/screens/TeacherDashboardScreen';
 import TeacherClassroomsScreen from './src/screens/TeacherClassroomsScreen';
+import TeacherQuizzesScreen from './src/screens/TeacherQuizzesScreen';
 import NoteToQuizScreen from './src/screens/NoteToQuizScreen';
 import ClassAnalyticsScreen from './src/screens/ClassAnalyticsScreen';
 
@@ -129,22 +130,42 @@ function AppContent() {
             />
           );
         case 'chats':
-          return <WhatsAppChatsScreen onBack={() => setActiveTab('teacherDashboard')} />;
+          return (
+            <WhatsAppChatsScreen
+              onBack={() => setActiveTab('teacherDashboard')}
+              onOpenSettings={() => setActiveTab('settings')}
+            />
+          );
         case 'teacherClassrooms':
-          return <TeacherClassroomsScreen />;
+          return <TeacherClassroomsScreen onBack={() => setActiveTab('teacherDashboard')} />;
+        case 'teacherQuizzes':
+        case 'quizzes':
+          return (
+            <TeacherQuizzesScreen
+              onBack={() => setActiveTab('teacherDashboard')}
+              onNavigateClassrooms={() => setActiveTab('teacherClassrooms')}
+              onNavigateBank={() => setActiveTab('questionBank')}
+            />
+          );
         case 'questionBank':
         case 'tests':
           return <StandardTestsScreen onBack={() => setActiveTab('teacherDashboard')} />;
         case 'noteToQuiz':
           return (
             <NoteToQuizScreen
-              onQuizCreated={() => setActiveTab('teacherClassrooms')}
+              onQuizCreated={() => setActiveTab('teacherQuizzes')}
             />
           );
         case 'analytics':
           return <ClassAnalyticsScreen />;
+        case 'settings':
         case 'profile':
-          return <ProfileScreen onBack={() => setActiveTab('teacherDashboard')} />;
+          return (
+            <SettingsScreen
+              onBack={() => setActiveTab('teacherDashboard')}
+              onOpenAdmin={() => setActiveTab('admin')}
+            />
+          );
         default:
           return <TeacherDashboardScreen onNavigateTab={(tab) => setActiveTab(tab)} />;
       }
@@ -176,13 +197,18 @@ function AppContent() {
             }}
             onOpenClassrooms={() => setActiveTab('classrooms')}
             onOpenLeaderboard={() => setActiveTab('leaderboard')}
-            onOpenProfile={() => setActiveTab('profile')}
+            onOpenProfile={() => setActiveTab('settings')}
             onOpenAdmin={() => setActiveTab('admin')}
           />
         );
       case 'chats':
       case 'chat':
-        return <WhatsAppChatsScreen onBack={() => setActiveTab('dashboard')} />;
+        return (
+          <WhatsAppChatsScreen
+            onBack={() => setActiveTab('dashboard')}
+            onOpenSettings={() => setActiveTab('settings')}
+          />
+        );
       case 'arena':
         return <DailyArenaScreen onBack={() => setActiveTab('dashboard')} />;
       case 'questionBank':
@@ -198,9 +224,10 @@ function AppContent() {
         );
       case 'leaderboard':
         return <LeaderboardScreen onBack={() => setActiveTab('dashboard')} />;
+      case 'settings':
       case 'profile':
         return (
-          <ProfileScreen
+          <SettingsScreen
             onBack={() => setActiveTab('dashboard')}
             onOpenAdmin={() => setActiveTab('admin')}
           />

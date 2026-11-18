@@ -36,13 +36,13 @@ export const darkPalette = {
 
 export const lightPalette = {
   bg: '#F8FAFC',
-  bgSecondary: '#EEF2F6',
+  bgSecondary: '#FFFFFF',
   card: '#FFFFFF',
   cardHover: '#F1F5F9',
   cardBorder: '#E2E8F0',
   text: '#0F172A',
-  textSecondary: '#475569',
-  textMuted: '#94A3B8',
+  textSecondary: '#334155',
+  textMuted: '#64748B',
   primary: '#2563EB',
   primaryDark: '#1D4ED8',
   accent: '#EA580C',
@@ -50,7 +50,7 @@ export const lightPalette = {
   success: '#059669',
   warning: '#D97706',
   error: '#E11D48',
-  inputBg: '#FFFFFF',
+  inputBg: '#F8FAFC',
   inputBorder: '#CBD5E1',
   statusBarStyle: 'dark',
 

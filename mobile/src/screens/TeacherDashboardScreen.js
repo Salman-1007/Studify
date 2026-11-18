@@ -66,8 +66,26 @@ export default function TeacherDashboardScreen({ onNavigateTab }) {
         title="Educator Portal"
         subtitle={user?.institution || user?.name || 'Academic Workspace'}
         rightElement={
-          <View style={[styles.badge, { backgroundColor: `${theme.primary}20` }]}>
-            <Text style={[styles.badgeText, { color: theme.primary }]}>TEACHER</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={[styles.badge, { backgroundColor: `${theme.primary}20` }]}>
+              <Text style={[styles.badgeText, { color: theme.primary }]}>TEACHER</Text>
+            </View>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => onNavigateTab && onNavigateTab('settings')}
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: `${theme.primary}25`,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={{ color: theme.primary, fontWeight: '800', fontSize: 13 }}>
+                {user?.name ? user.name.charAt(0).toUpperCase() : 'T'}
+              </Text>
+            </TouchableOpacity>
           </View>
         }
       />
@@ -114,9 +132,39 @@ export default function TeacherDashboardScreen({ onNavigateTab }) {
             activeOpacity={0.8}
             onPress={() => {
               triggerHaptic('light');
-              if (onNavigateTab) onNavigateTab('noteToQuiz');
+              if (onNavigateTab) onNavigateTab('teacherQuizzes');
             }}
             style={[styles.toolCard, { backgroundColor: theme.card, borderColor: `${theme.primary}50` }]}
+          >
+            <Text style={styles.toolIcon}>📚</Text>
+            <Text style={[styles.toolTitle, { color: theme.text }]}>Quiz Library & Builder</Text>
+            <Text style={[styles.toolSub, { color: theme.textMuted }]}>
+              Create custom assessments, assign tests to classrooms, and track submissions
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => {
+              triggerHaptic('light');
+              if (onNavigateTab) onNavigateTab('questionBank');
+            }}
+            style={[styles.toolCard, { backgroundColor: theme.card, borderColor: `${theme.accentGold}50` }]}
+          >
+            <Text style={styles.toolIcon}>🏛️</Text>
+            <Text style={[styles.toolTitle, { color: theme.text }]}>Curriculum Question Bank</Text>
+            <Text style={[styles.toolSub, { color: theme.textMuted }]}>
+              Browse canonical MDCAT, ECAT, FBISE & Punjab Board questions & syllabus tracks
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => {
+              triggerHaptic('light');
+              if (onNavigateTab) onNavigateTab('noteToQuiz');
+            }}
+            style={[styles.toolCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}
           >
             <Text style={styles.toolIcon}>✨</Text>
             <Text style={[styles.toolTitle, { color: theme.text }]}>Note-to-Quiz AI</Text>

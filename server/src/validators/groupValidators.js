@@ -5,6 +5,7 @@ export const createGroupSchema = z.object({
   description: z.string().optional(),
   subject: z.string().optional(),
   privacy: z.enum(['PUBLIC', 'PRIVATE']).default('PUBLIC'),
+  memberIds: z.array(z.string()).optional(),
 });
 
 export const joinGroupSchema = z.object({

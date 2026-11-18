@@ -28,6 +28,8 @@ import {
   PlusIcon,
   UsersIcon,
   PaperclipIcon,
+  SunIcon,
+  MoonIcon,
 } from '../components/Icons';
 
 export function formatActivityPresence(presence) {
@@ -71,14 +73,15 @@ export function formatActivityPresence(presence) {
   };
 }
 
-export function MessageStatusTick({ status, size = 13 }) {
+export function MessageStatusTick({ status, size = 13, isDark = true }) {
   if (status === 'SEEN') {
     return <CheckCheckIcon size={size} color="#53BDEB" />;
   }
+  const defaultGray = isDark ? 'rgba(255, 255, 255, 0.45)' : 'rgba(0, 0, 0, 0.45)';
   if (status === 'DELIVERED') {
-    return <CheckCheckIcon size={size} color="rgba(255, 255, 255, 0.45)" />;
+    return <CheckCheckIcon size={size} color={defaultGray} />;
   }
-  return <CheckIcon size={size} color="rgba(255, 255, 255, 0.45)" />;
+  return <CheckIcon size={size} color={defaultGray} />;
 }
 
 export function getChatPartner(chat, currentUserId) {
@@ -106,9 +109,9 @@ export function getChatPartner(chat, currentUserId) {
   };
 }
 
-export default function WhatsAppChatsScreen({ onBack: _onBack }) {
+export default function WhatsAppChatsScreen({ onBack: _onBack, onOpenSettings }) {
   const { user, token } = useAuth();
-  const { theme } = useTheme();
+  const { theme, isDark, setThemePreference } = useTheme();
 
   // Active chat sub-tab: 'direct' | 'groups'
   const [activeTab, setActiveTab] = useState('direct');
@@ -126,12 +129,32 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
   const [userSearchResults, setUserSearchResults] = useState([]);
   const [searchingUsers, setSearchingUsers] = useState(false);
 
-  // New Group Circle Modal
+  // New Group Circle Modal with Participant Selection
   const [newGroupModal, setNewGroupModal] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [groupSubject, setGroupSubject] = useState('');
   const [groupDesc, setGroupDesc] = useState('');
   const [creatingGroup, setCreatingGroup] = useState(false);
+  const [selectedGroupMembers, setSelectedGroupMembers] = useState([]);
+  const [groupUserSearchQuery, setGroupUserSearchQuery] = useState('');
+  const [groupUserSearchResults, setGroupUserSearchResults] = useState([]);
+  const [searchingGroupUsers, setSearchingGroupUsers] = useState(false);
+
+  // Join Group by Code Modal
+  const [joinModalVisible, setJoinModalVisible] = useState(false);
+  const [joinCodeInput, setJoinCodeInput] = useState('');
+  const [joiningGroup, setJoiningGroup] = useState(false);
+
+  // Group Info Drawer Modal
+  const [groupInfoModalVisible, setGroupInfoModalVisible] = useState(false);
+  const [groupDetails, setGroupDetails] = useState(null);
+  const [groupMembersList, setGroupMembersList] = useState([]);
+  const [loadingGroupInfo, setLoadingGroupInfo] = useState(false);
+
+  // Add Members to Existing Group Modal
+  const [addMembersModalVisible, setAddMembersModalVisible] = useState(false);
+  const [addMembersSelected, setAddMembersSelected] = useState([]);
+  const [addingMembers, setAddingMembers] = useState(false);
 
   // Data lists
   const [directChats, setDirectChats] = useState([]);
@@ -149,13 +172,13 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
   const chatScrollRef = useRef(null);
 
   // ----------------------------------------------------
-  // Load Direct and Group Chats
+  // Load Direct and Group Chats (WhatsApp Whitelist Filter)
   // ----------------------------------------------------
   const loadAllChats = useCallback(async () => {
     try {
       const [directRes, groupRes] = await Promise.allSettled([
         apiClient.get('/direct-chats'),
-        apiClient.get('/groups'),
+        apiClient.get('/groups/my').catch(() => apiClient.get('/groups')),
       ]);
 
       if (directRes.status === 'fulfilled') {
@@ -163,7 +186,17 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
       }
 
       if (groupRes.status === 'fulfilled') {
-        setGroupChats(groupRes.value.data?.data?.groups || groupRes.value.data?.data || []);
+        const rawGroups = groupRes.value.data?.data?.groups || groupRes.value.data?.data || [];
+        // Strictly show ONLY groups where current user is owner or an active participant
+        const myJoinedGroups = rawGroups.filter((g) => {
+          if (!g) return false;
+          if (g.ownerId === user?.id) return true;
+          if (Array.isArray(g.members)) {
+            return g.members.some((m) => (m.userId || m.user?.id) === user?.id);
+          }
+          return false;
+        });
+        setGroupChats(myJoinedGroups);
       }
     } catch (err) {
       console.warn('[Chats] Error loading conversations:', err.message);
@@ -171,7 +204,7 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
     loadAllChats();
@@ -485,18 +518,57 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
   };
 
   // ----------------------------------------------------
-  // Create New Study Circle Group
+  // Member Search for Group Creation & Addition
+  // ----------------------------------------------------
+  const handleSearchGroupUsers = async (q) => {
+    setGroupUserSearchQuery(q);
+    if (!q.trim() || q.length < 2) {
+      setGroupUserSearchResults([]);
+      return;
+    }
+
+    try {
+      setSearchingGroupUsers(true);
+      const res = await apiClient
+        .get(`/users/search?q=${encodeURIComponent(q.trim())}`)
+        .catch(async () => apiClient.get(`/direct-chats/search-users?q=${encodeURIComponent(q.trim())}`));
+      const found = res.data?.data?.users || res.data?.data || [];
+      setGroupUserSearchResults(found.filter((u) => u.id !== user?.id));
+    } catch (err) {
+      console.warn('[Chats] Search group users error:', err.message);
+    } finally {
+      setSearchingGroupUsers(false);
+    }
+  };
+
+  const toggleSelectGroupMember = (usr) => {
+    triggerHaptic('selection');
+    setSelectedGroupMembers((prev) => {
+      const exists = prev.some((m) => m.id === usr.id);
+      if (exists) {
+        return prev.filter((m) => m.id !== usr.id);
+      }
+      return [...prev, usr];
+    });
+  };
+
+  // ----------------------------------------------------
+  // Create New WhatsApp-Style Private Study Circle Group
   // ----------------------------------------------------
   const handleCreateGroup = async () => {
-    if (!groupName.trim()) return;
+    if (!groupName.trim()) {
+      Alert.alert('Required', 'Please enter a group name.');
+      return;
+    }
     try {
       triggerHaptic('medium');
       setCreatingGroup(true);
       const res = await apiClient.post('/groups', {
         name: groupName.trim(),
         subject: groupSubject.trim() || 'General Studies',
-        description: groupDesc.trim() || 'Collaborative study group',
-        isPrivate: false,
+        description: groupDesc.trim() || 'WhatsApp-style private study group',
+        privacy: 'PRIVATE',
+        memberIds: selectedGroupMembers.map((m) => m.id),
       });
 
       const newGrp = res.data?.data?.group || res.data?.data;
@@ -504,9 +576,15 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
       setGroupName('');
       setGroupSubject('');
       setGroupDesc('');
+      setSelectedGroupMembers([]);
+      setGroupUserSearchQuery('');
+      setGroupUserSearchResults([]);
       triggerHaptic('success');
-      Alert.alert('Study Circle Created! 🎓', 'You can now invite members and share discussions.');
-      loadAllChats();
+      Alert.alert(
+        'Study Circle Created! 🎓',
+        `Private circle created with ${selectedGroupMembers.length + 1} participant(s). Only invited participants can see or participate.`
+      );
+      await loadAllChats();
       if (newGrp?.id) {
         handleOpenGroupRoom(newGrp);
       }
@@ -514,6 +592,86 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
       Alert.alert('Error', err.response?.data?.message || 'Could not create study group.');
     } finally {
       setCreatingGroup(false);
+    }
+  };
+
+  // ----------------------------------------------------
+  // Join Group via Code or Invite Link
+  // ----------------------------------------------------
+  const handleJoinByCode = async () => {
+    if (!joinCodeInput.trim()) {
+      Alert.alert('Required', 'Please enter an invite code or paste link.');
+      return;
+    }
+    try {
+      setJoiningGroup(true);
+      triggerHaptic('medium');
+      const raw = joinCodeInput.trim();
+      const code = raw.includes('/') ? raw.split('/').pop().trim() : raw;
+
+      const res = await apiClient.post('/groups/join-by-code', { code });
+      const grp = res.data?.data?.group || res.data?.data;
+      triggerHaptic('success');
+      setJoinModalVisible(false);
+      setJoinCodeInput('');
+      Alert.alert('Joined Group! 👥', `You are now a member of "${grp?.name || 'the study group'}".`);
+      await loadAllChats();
+      if (grp?.id) {
+        handleOpenGroupRoom(grp);
+      }
+    } catch (err) {
+      Alert.alert('Join Error', err.response?.data?.message || 'Invalid or expired invite code.');
+    } finally {
+      setJoiningGroup(false);
+    }
+  };
+
+  // ----------------------------------------------------
+  // Open Group Info Drawer
+  // ----------------------------------------------------
+  const handleOpenGroupInfo = async () => {
+    if (!activeRoom || activeRoom.type !== 'group') return;
+    try {
+      triggerHaptic('selection');
+      setGroupInfoModalVisible(true);
+      setLoadingGroupInfo(true);
+      const res = await apiClient.get(`/groups/${activeRoom.data.id}`);
+      const grp = res.data?.data?.group || res.data?.data || activeRoom.data;
+      setGroupDetails(grp);
+      setGroupMembersList(grp.members || []);
+    } catch (err) {
+      console.warn('[Chats] Group info error:', err.message);
+    } finally {
+      setLoadingGroupInfo(false);
+    }
+  };
+
+  // ----------------------------------------------------
+  // Add Members to Existing Group
+  // ----------------------------------------------------
+  const handleAddMembersToExistingGroup = async () => {
+    if (!activeRoom || addMembersSelected.length === 0) return;
+    try {
+      setAddingMembers(true);
+      triggerHaptic('medium');
+      await apiClient.post(`/groups/${activeRoom.data.id}/add-members`, {
+        userIds: addMembersSelected.map((u) => u.id),
+      });
+      triggerHaptic('success');
+      Alert.alert('Members Added!', `Added ${addMembersSelected.length} participant(s) to the circle.`);
+      setAddMembersModalVisible(false);
+      setAddMembersSelected([]);
+
+      // Refresh group info and chat list
+      const res = await apiClient.get(`/groups/${activeRoom.data.id}`);
+      const grp = res.data?.data?.group || res.data?.data;
+      setGroupDetails(grp);
+      setGroupMembersList(grp.members || []);
+      loadAllChats();
+    } catch (err) {
+      Alert.alert('Error', err.response?.data?.message || 'Could not add members.');
+    } finally {
+      setAddingMembers(false);
     }
   };
 
@@ -872,11 +1030,15 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
               {title.charAt(0).toUpperCase()}
             </Text>
             {isDirect && presenceInfo?.isOnline && (
-              <View style={styles.roomOnlineBadge} />
+              <View style={[styles.roomOnlineBadge, { borderColor: theme.bg }]} />
             )}
           </View>
 
-          <View style={styles.roomHeaderInfo}>
+          <TouchableOpacity
+            style={styles.roomHeaderInfo}
+            activeOpacity={isDirect ? 1 : 0.7}
+            onPress={isDirect ? undefined : handleOpenGroupInfo}
+          >
             <Text numberOfLines={1} style={styles.roomHeaderTitle}>{title}</Text>
             <Text
               numberOfLines={1}
@@ -887,11 +1049,11 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
             >
               {subtitle}
             </Text>
-          </View>
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.roomMoreBtn}
-            onPress={handleOpenRoomOptions}
+            onPress={isDirect ? handleOpenRoomOptions : handleOpenGroupInfo}
           >
             <MoreVerticalIcon size={20} color="#FFFFFF" />
           </TouchableOpacity>
@@ -943,7 +1105,18 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
                     {isUnsent ? '🚫 This message was deleted' : m.content}
                   </Text>
                   <View style={styles.waTimeRow}>
-                    <Text style={[styles.waTimeText, { color: isMe ? 'rgba(255,255,255,0.65)' : theme.textMuted }]}>
+                    <Text
+                      style={[
+                        styles.waTimeText,
+                        {
+                          color: isMe
+                            ? isDark
+                              ? 'rgba(255,255,255,0.7)'
+                              : 'rgba(0,0,0,0.6)'
+                            : theme.textMuted,
+                        },
+                      ]}
+                    >
                       {timeStr}
                     </Text>
                     {isMe && !isUnsent && (
@@ -951,6 +1124,7 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
                         <MessageStatusTick
                           status={m.deliveryStatus || (m.receipts?.some((r) => r.userId !== user?.id && r.seenAt) ? 'SEEN' : 'SENT')}
                           size={14}
+                          isDark={isDark}
                         />
                       </View>
                     )}
@@ -1017,6 +1191,16 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
         <View style={styles.headerRightActions}>
           <TouchableOpacity
             style={styles.headerIconBtn}
+            onPress={() => {
+              triggerHaptic('light');
+              setThemePreference(isDark ? 'light' : 'dark');
+            }}
+          >
+            {isDark ? <SunIcon size={20} color="#F59E0B" /> : <MoonIcon size={20} color="#FFFFFF" />}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.headerIconBtn}
             onPress={() => setIsSearching((prev) => !prev)}
           >
             <SearchIcon size={20} color="#FFFFFF" />
@@ -1043,7 +1227,12 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
             triggerHaptic('selection');
             setActiveTab('direct');
           }}
-          style={[styles.waTabItem, activeTab === 'direct' && styles.waTabItemActive]}
+          style={[
+            styles.waTabItem,
+            activeTab === 'direct' && {
+              borderBottomColor: isDark ? theme.waTeal : '#FFFFFF',
+            },
+          ]}
         >
           <View style={styles.tabContentRow}>
             <Text style={[styles.waTabText, activeTab === 'direct' && styles.waTabTextActive]}>
@@ -1063,7 +1252,12 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
             triggerHaptic('selection');
             setActiveTab('groups');
           }}
-          style={[styles.waTabItem, activeTab === 'groups' && styles.waTabItemActive]}
+          style={[
+            styles.waTabItem,
+            activeTab === 'groups' && {
+              borderBottomColor: isDark ? theme.waTeal : '#FFFFFF',
+            },
+          ]}
         >
           <View style={styles.tabContentRow}>
             <Text style={[styles.waTabText, activeTab === 'groups' && styles.waTabTextActive]}>
@@ -1156,7 +1350,7 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
                       {partner.fallbackInitial}
                     </Text>
                     {presenceInfo.isOnline && (
-                      <View style={styles.onlineDot} />
+                      <View style={[styles.onlineDot, { borderColor: theme.bg }]} />
                     )}
                   </View>
 
@@ -1172,6 +1366,7 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
                           <MessageStatusTick
                             status={lastMsg?.deliveryStatus || (lastMsg?.receipts?.some((r) => r.userId !== user?.id && r.seenAt) ? 'SEEN' : 'SENT')}
                             size={14}
+                            isDark={isDark}
                           />
                         </View>
                       )}
@@ -1293,7 +1488,48 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
               }}
               style={styles.menuItem}
             >
-              <Text style={[styles.menuItemText, { color: theme.text }]}>👥 New Study Circle</Text>
+              <Text style={[styles.menuItemText, { color: theme.text }]}>👥 New Group Circle</Text>
+            </TouchableOpacity>
+
+            <View style={[styles.menuDivider, { backgroundColor: theme.cardBorder }]} />
+
+            <TouchableOpacity
+              onPress={() => {
+                setMenuVisible(false);
+                setJoinModalVisible(true);
+              }}
+              style={styles.menuItem}
+            >
+              <Text style={[styles.menuItemText, { color: theme.text }]}>🔑 Join Group via Code</Text>
+            </TouchableOpacity>
+
+            <View style={[styles.menuDivider, { backgroundColor: theme.cardBorder }]} />
+
+            <TouchableOpacity
+              onPress={() => {
+                triggerHaptic('light');
+                setThemePreference(isDark ? 'light' : 'dark');
+                setMenuVisible(false);
+              }}
+              style={styles.menuItem}
+            >
+              <Text style={[styles.menuItemText, { color: theme.text }]}>
+                {isDark ? '☀️ Switch to Light Mode' : '🌙 Switch to Dark Mode'}
+              </Text>
+            </TouchableOpacity>
+
+            <View style={[styles.menuDivider, { backgroundColor: theme.cardBorder }]} />
+
+            <TouchableOpacity
+              onPress={() => {
+                setMenuVisible(false);
+                if (onOpenSettings) {
+                  onOpenSettings();
+                }
+              }}
+              style={styles.menuItem}
+            >
+              <Text style={[styles.menuItemText, { color: theme.text }]}>⚙️ Settings & Log Out</Text>
             </TouchableOpacity>
 
             <View style={[styles.menuDivider, { backgroundColor: theme.cardBorder }]} />
@@ -1376,9 +1612,9 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
       {/* Modal: Create New Study Circle Group */}
       <Modal visible={newGroupModal} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
-          <View style={[styles.modalBox, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+          <View style={[styles.modalBox, { backgroundColor: theme.card, borderColor: theme.cardBorder, maxHeight: '88%' }]}>
             <View style={styles.modalHeaderRow}>
-              <Text style={[styles.modalHeading, { color: theme.text }]}>Create Study Circle</Text>
+              <Text style={[styles.modalHeading, { color: theme.text }]}>Create Private Study Group</Text>
               <TouchableOpacity onPress={() => setNewGroupModal(false)}>
                 <Text style={{ fontSize: 16, color: theme.textMuted }}>✕</Text>
               </TouchableOpacity>
@@ -1401,13 +1637,89 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
             />
 
             <TextInput
-              style={[styles.userSearchInput, { backgroundColor: theme.inputBg, color: theme.text, borderColor: theme.inputBorder, height: 70 }]}
-              placeholder="Description..."
+              style={[styles.userSearchInput, { backgroundColor: theme.inputBg, color: theme.text, borderColor: theme.inputBorder, height: 50 }]}
+              placeholder="Group Description (optional)..."
               placeholderTextColor={theme.textMuted}
               multiline
               value={groupDesc}
               onChangeText={setGroupDesc}
             />
+
+            {/* Selected Members Chips */}
+            <Text style={{ color: theme.textMuted, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', marginTop: 6, marginBottom: 4 }}>
+              Add Members by List ({selectedGroupMembers.length} selected)
+            </Text>
+
+            {selectedGroupMembers.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 36, marginBottom: 8 }}>
+                {selectedGroupMembers.map((m) => (
+                  <TouchableOpacity
+                    key={m.id}
+                    onPress={() => toggleSelectGroupMember(m)}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      backgroundColor: `${theme.waTeal}20`,
+                      borderColor: theme.waTeal,
+                      borderWidth: 1,
+                      borderRadius: 14,
+                      paddingHorizontal: 8,
+                      paddingVertical: 4,
+                      marginRight: 6,
+                    }}
+                  >
+                    <Text style={{ color: theme.waTeal, fontSize: 11, fontWeight: '600' }}>
+                      {m.username ? `@${m.username}` : (m.name || 'Scholar')}
+                    </Text>
+                    <Text style={{ color: theme.waTeal, marginLeft: 4, fontSize: 11 }}>✕</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+
+            {/* Search Classmates to Add */}
+            <TextInput
+              style={[styles.userSearchInput, { backgroundColor: theme.inputBg, color: theme.text, borderColor: theme.inputBorder }]}
+              placeholder="Search classmates to add..."
+              placeholderTextColor={theme.textMuted}
+              value={groupUserSearchQuery}
+              onChangeText={handleSearchGroupUsers}
+            />
+
+            <ScrollView style={{ maxHeight: 110, marginBottom: 10 }}>
+              {searchingGroupUsers ? (
+                <ActivityIndicator color={theme.waTeal} style={{ marginVertical: 8 }} />
+              ) : (
+                groupUserSearchResults.map((usr) => {
+                  const isSelected = selectedGroupMembers.some((m) => m.id === usr.id);
+                  return (
+                    <TouchableOpacity
+                      key={usr.id}
+                      onPress={() => toggleSelectGroupMember(usr)}
+                      style={[
+                        styles.searchUserRow,
+                        {
+                          borderColor: theme.cardBorder,
+                          backgroundColor: isSelected ? `${theme.waTeal}15` : 'transparent',
+                        },
+                      ]}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.searchUserName, { color: theme.text }]}>
+                          {usr.name || usr.username}
+                        </Text>
+                        <Text style={[styles.searchUserMeta, { color: theme.textMuted }]}>
+                          {usr.username ? `@${usr.username}` : usr.email}
+                        </Text>
+                      </View>
+                      <Text style={{ color: isSelected ? theme.waTeal : theme.textMuted, fontSize: 12, fontWeight: '700' }}>
+                        {isSelected ? '✓ Added' : '+ Add'}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </ScrollView>
 
             <TouchableOpacity
               disabled={creatingGroup || !groupName.trim()}
@@ -1417,7 +1729,357 @@ export default function WhatsAppChatsScreen({ onBack: _onBack }) {
               {creatingGroup ? (
                 <ActivityIndicator size="small" color="#FFF" />
               ) : (
-                <Text style={styles.createGroupBtnText}>Create Circle</Text>
+                <Text style={styles.createGroupBtnText}>Create Group & Add Participants</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal: Join Group via Code / Invite Link */}
+      <Modal visible={joinModalVisible} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalBox, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+            <View style={styles.modalHeaderRow}>
+              <Text style={[styles.modalHeading, { color: theme.text }]}>Join Private Study Circle</Text>
+              <TouchableOpacity onPress={() => setJoinModalVisible(false)}>
+                <Text style={{ fontSize: 16, color: theme.textMuted }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.modalSubheading, { color: theme.textMuted }]}>
+              Enter the 6-character group invite code or paste an invite link:
+            </Text>
+
+            <TextInput
+              style={[
+                styles.userSearchInput,
+                {
+                  backgroundColor: theme.inputBg,
+                  color: theme.text,
+                  borderColor: theme.inputBorder,
+                  fontSize: 16,
+                  letterSpacing: 2,
+                  textAlign: 'center',
+                  fontWeight: '700',
+                },
+              ]}
+              placeholder="e.g. 7A4F82"
+              placeholderTextColor={theme.textMuted}
+              value={joinCodeInput}
+              onChangeText={setJoinCodeInput}
+              autoCapitalize="characters"
+              autoFocus
+            />
+
+            <TouchableOpacity
+              disabled={joiningGroup || !joinCodeInput.trim()}
+              onPress={handleJoinByCode}
+              style={[
+                styles.createGroupBtn,
+                {
+                  backgroundColor: theme.waTeal,
+                  opacity: !joinCodeInput.trim() ? 0.5 : 1,
+                  marginTop: 14,
+                },
+              ]}
+            >
+              {joiningGroup ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <Text style={styles.createGroupBtnText}>Join Study Circle 🚀</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal: Group Info & Invite Link Drawer */}
+      <Modal visible={groupInfoModalVisible} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalBox, { backgroundColor: theme.card, borderColor: theme.cardBorder, maxHeight: '85%' }]}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.modalHeading, { color: theme.text }]}>
+                  {groupDetails?.name || activeRoom?.data?.name || 'Study Circle'}
+                </Text>
+                <Text style={[styles.modalSubheading, { color: theme.textMuted, marginTop: 2 }]}>
+                  {groupDetails?.subject || activeRoom?.data?.subject || 'General'}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setGroupInfoModalVisible(false)}>
+                <Text style={{ fontSize: 16, color: theme.textMuted }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            {loadingGroupInfo ? (
+              <ActivityIndicator color={theme.waTeal} style={{ marginVertical: 30 }} />
+            ) : (
+              <ScrollView style={{ marginVertical: 10 }}>
+                {/* Description */}
+                {Boolean(groupDetails?.description) && (
+                  <Text style={{ color: theme.textSecondary, fontSize: 13, marginBottom: 12 }}>
+                    {groupDetails.description}
+                  </Text>
+                )}
+
+                {/* Invite Link & Code Card */}
+                <View
+                  style={{
+                    backgroundColor: `${theme.waTeal}15`,
+                    borderColor: `${theme.waTeal}40`,
+                    borderWidth: 1,
+                    borderRadius: 12,
+                    padding: 12,
+                    marginBottom: 16,
+                  }}
+                >
+                  <Text style={{ color: theme.waTeal, fontSize: 11, fontWeight: '700', textTransform: 'uppercase' }}>
+                    Group Invite Code & Link
+                  </Text>
+                  <Text
+                    style={{
+                      color: theme.text,
+                      fontSize: 20,
+                      fontWeight: '800',
+                      letterSpacing: 2,
+                      marginVertical: 6,
+                    }}
+                  >
+                    {groupDetails?.joinCode || activeRoom?.data?.joinCode || 'STUDIFY'}
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        const code = groupDetails?.joinCode || activeRoom?.data?.joinCode;
+                        triggerHaptic('success');
+                        Alert.alert('Invite Code', `Share this code with your classmates: ${code}`);
+                      }}
+                      style={{
+                        flex: 1,
+                        backgroundColor: theme.waTeal,
+                        paddingVertical: 8,
+                        borderRadius: 6,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '700' }}>Share Code</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => {
+                        const code = groupDetails?.joinCode || activeRoom?.data?.joinCode;
+                        triggerHaptic('success');
+                        Alert.alert(
+                          'Invite Link',
+                          `Share this link: https://studify-dcq6.onrender.com/join-group/${code}`
+                        );
+                      }}
+                      style={{
+                        flex: 1,
+                        backgroundColor: `${theme.waTeal}30`,
+                        borderColor: theme.waTeal,
+                        borderWidth: 1,
+                        paddingVertical: 8,
+                        borderRadius: 6,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Text style={{ color: theme.waTeal, fontSize: 12, fontWeight: '700' }}>Copy Link</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Add Participants Button for Owner/Mod */}
+                {(groupDetails?.ownerId === user?.id ||
+                  groupMembersList.some((m) => (m.userId === user?.id || m.user?.id === user?.id) && m.role === 'MODERATOR')) && (
+                  <TouchableOpacity
+                    onPress={() => {
+                      setGroupInfoModalVisible(false);
+                      setAddMembersModalVisible(true);
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      paddingVertical: 10,
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: theme.primary,
+                      backgroundColor: `${theme.primary}15`,
+                      marginBottom: 16,
+                    }}
+                  >
+                    <Text style={{ color: theme.primary, fontWeight: '700', fontSize: 13 }}>
+                      + Add Participants to Circle
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* Enrolled Participants List */}
+                <Text style={{ color: theme.textMuted, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', marginBottom: 8 }}>
+                  Participants ({groupMembersList.length})
+                </Text>
+                {groupMembersList.map((mem) => {
+                  const u = mem.user || mem;
+                  const isOwner = mem.role === 'OWNER' || groupDetails?.ownerId === u.id;
+                  return (
+                    <View
+                      key={mem.id || u.id}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        paddingVertical: 8,
+                        borderBottomColor: theme.cardBorder,
+                        borderBottomWidth: 1,
+                      }}
+                    >
+                      <View
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 16,
+                          backgroundColor: `${theme.primary}20`,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          marginRight: 10,
+                        }}
+                      >
+                        <Text style={{ color: theme.primary, fontWeight: '700', fontSize: 12 }}>
+                          {(u.name || u.username || 'U').charAt(0).toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: theme.text, fontSize: 13, fontWeight: '600' }}>
+                          {u.name || u.username} {u.id === user?.id ? '(You)' : ''}
+                        </Text>
+                        <Text style={{ color: theme.textMuted, fontSize: 11 }}>
+                          {u.username ? `@${u.username}` : (u.email || 'Participant')}
+                        </Text>
+                      </View>
+                      {isOwner && (
+                        <View style={{ backgroundColor: 'rgba(234, 179, 8, 0.2)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                          <Text style={{ color: '#EAB308', fontSize: 10, fontWeight: '800' }}>OWNER</Text>
+                        </View>
+                      )}
+                    </View>
+                  );
+                })}
+
+                {/* Leave Group Action */}
+                <TouchableOpacity
+                  onPress={() => {
+                    setGroupInfoModalVisible(false);
+                    Alert.alert('Leave Circle', 'Are you sure you want to leave this circle?', [
+                      { text: 'Cancel', style: 'cancel' },
+                      {
+                        text: 'Leave',
+                        style: 'destructive',
+                        onPress: async () => {
+                          try {
+                            await apiClient.delete(`/groups/${activeRoom.data.id}/members/${user?.id}`);
+                            setActiveRoom(null);
+                            loadAllChats();
+                          } catch (err) {
+                            Alert.alert('Error', err.response?.data?.message || 'Could not leave circle.');
+                          }
+                        },
+                      },
+                    ]);
+                  }}
+                  style={{
+                    paddingVertical: 12,
+                    alignItems: 'center',
+                    marginTop: 20,
+                  }}
+                >
+                  <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 13 }}>
+                    Exit Study Circle
+                  </Text>
+                </TouchableOpacity>
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal: Add Members to Existing Group */}
+      <Modal visible={addMembersModalVisible} transparent animationType="slide">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalBox, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+            <View style={styles.modalHeaderRow}>
+              <Text style={[styles.modalHeading, { color: theme.text }]}>Add Participants</Text>
+              <TouchableOpacity onPress={() => setAddMembersModalVisible(false)}>
+                <Text style={{ fontSize: 16, color: theme.textMuted }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TextInput
+              style={[styles.userSearchInput, { backgroundColor: theme.inputBg, color: theme.text, borderColor: theme.inputBorder }]}
+              placeholder="Search classmates to add..."
+              placeholderTextColor={theme.textMuted}
+              value={groupUserSearchQuery}
+              onChangeText={handleSearchGroupUsers}
+            />
+
+            <ScrollView style={{ maxHeight: 200, marginVertical: 10 }}>
+              {searchingGroupUsers ? (
+                <ActivityIndicator color={theme.waTeal} style={{ marginVertical: 8 }} />
+              ) : (
+                groupUserSearchResults.map((usr) => {
+                  const isSelected = addMembersSelected.some((m) => m.id === usr.id);
+                  return (
+                    <TouchableOpacity
+                      key={usr.id}
+                      onPress={() => {
+                        setAddMembersSelected((prev) =>
+                          prev.some((m) => m.id === usr.id)
+                            ? prev.filter((m) => m.id !== usr.id)
+                            : [...prev, usr]
+                        );
+                      }}
+                      style={[
+                        styles.searchUserRow,
+                        {
+                          borderColor: theme.cardBorder,
+                          backgroundColor: isSelected ? `${theme.waTeal}15` : 'transparent',
+                        },
+                      ]}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.searchUserName, { color: theme.text }]}>
+                          {usr.name || usr.username}
+                        </Text>
+                        <Text style={[styles.searchUserMeta, { color: theme.textMuted }]}>
+                          {usr.username ? `@${usr.username}` : usr.email}
+                        </Text>
+                      </View>
+                      <Text style={{ color: isSelected ? theme.waTeal : theme.textMuted, fontSize: 12, fontWeight: '700' }}>
+                        {isSelected ? '✓ Added' : '+ Add'}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </ScrollView>
+
+            <TouchableOpacity
+              disabled={addingMembers || addMembersSelected.length === 0}
+              onPress={handleAddMembersToExistingGroup}
+              style={[
+                styles.createGroupBtn,
+                {
+                  backgroundColor: theme.waTeal,
+                  opacity: addMembersSelected.length === 0 ? 0.5 : 1,
+                },
+              ]}
+            >
+              {addingMembers ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <Text style={styles.createGroupBtnText}>
+                  Confirm Add ({addMembersSelected.length})
+                </Text>
               )}
             </TouchableOpacity>
           </View>

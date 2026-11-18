@@ -35,6 +35,7 @@ export default function TeacherClassroomsScreen({ onBack }) {
   const [selectedClass, setSelectedClass] = useState(null);
   const [members, setMembers] = useState([]);
   const [announcements, setAnnouncements] = useState([]);
+  const [assignments, setAssignments] = useState([]);
   const [loadingDetail, setLoadingDetail] = useState(false);
 
   // Post announcement modal
@@ -72,9 +73,11 @@ export default function TeacherClassroomsScreen({ onBack }) {
       ]);
 
       if (detailRes.status === 'fulfilled') {
-        const d = detailRes.value.data?.data?.classroom || detailRes.value.data?.data || cls;
+        const payload = detailRes.value.data?.data || {};
+        const d = payload.classroom || payload || cls;
         setSelectedClass(d);
-        setAnnouncements(d.announcements || []);
+        setAnnouncements(payload.announcements || d.announcements || []);
+        setAssignments(payload.assignments || d.assignments || []);
       }
 
       if (membersRes.status === 'fulfilled') {
@@ -214,6 +217,43 @@ export default function TeacherClassroomsScreen({ onBack }) {
                 <Text style={[styles.annContent, { color: theme.textSecondary }]}>{ann.content}</Text>
                 <Text style={[styles.annDate, { color: theme.textMuted }]}>
                   {new Date(ann.createdAt).toLocaleDateString()}
+                </Text>
+              </View>
+            ))
+          )}
+
+          {/* Assigned Quizzes Section */}
+          <Text style={[styles.sectionHeading, { color: theme.text, marginTop: 24 }]}>
+            Assigned Quizzes ({assignments.length})
+          </Text>
+
+          {assignments.length === 0 ? (
+            <View style={[styles.emptyCard, { backgroundColor: theme.card }]}>
+              <Text style={[styles.emptyText, { color: theme.textMuted }]}>
+                No quizzes assigned to this classroom yet. Use the Quiz Builder to assign assessments.
+              </Text>
+            </View>
+          ) : (
+            assignments.map((asg) => (
+              <View
+                key={asg.id}
+                style={[
+                  styles.annCard,
+                  { backgroundColor: theme.card, borderColor: theme.cardBorder },
+                ]}
+              >
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={[styles.annTitle, { color: theme.text, flex: 1 }]}>
+                    📝 {asg.title || asg.quiz?.title || 'Class Quiz'}
+                  </Text>
+                  <View style={{ backgroundColor: `${theme.primary}20`, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                    <Text style={{ color: theme.primary, fontSize: 10, fontWeight: '800' }}>
+                      {asg.status || 'ACTIVE'}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={[styles.annContent, { color: theme.textSecondary, marginTop: 4 }]}>
+                  {asg.questionCount || asg.quiz?.questions?.length || 10} Questions · Due: {asg.deadline || asg.dueDate ? new Date(asg.deadline || asg.dueDate).toLocaleDateString() : 'No Deadline'} · {asg.submissionsCount || 0} Submissions
                 </Text>
               </View>
             ))

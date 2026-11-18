@@ -14,10 +14,11 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { triggerHaptic } from '../utils/haptics';
+import { SunIcon, MoonIcon } from '../components/Icons';
 
 export default function SignupScreen({ onNavigateLogin }) {
   const { signup } = useAuth();
-  const { theme } = useTheme();
+  const { theme, isDark, setThemePreference } = useTheme();
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -73,6 +74,30 @@ export default function SignupScreen({ onNavigateLogin }) {
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
+        {/* Quick Theme Switcher */}
+        <View style={styles.topThemeRow}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => {
+              triggerHaptic('light');
+              setThemePreference(isDark ? 'light' : 'dark');
+            }}
+            style={[
+              styles.themeToggleBtn,
+              {
+                backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
+                borderColor: theme.cardBorder,
+              },
+            ]}
+          >
+            {isDark ? (
+              <SunIcon size={18} color="#F59E0B" />
+            ) : (
+              <MoonIcon size={18} color="#6366F1" />
+            )}
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.header}>
           <Text style={[styles.title, { color: theme.text }]}>Create Account</Text>
           <Text style={[styles.subtitle, { color: theme.textMuted }]}>
@@ -296,6 +321,19 @@ const styles = StyleSheet.create({
   scroll: {
     flexGrow: 1,
     padding: 22,
+    justifyContent: 'center',
+  },
+  topThemeRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginBottom: 4,
+  },
+  themeToggleBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
+    alignItems: 'center',
     justifyContent: 'center',
   },
   header: {

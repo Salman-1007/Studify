@@ -534,7 +534,7 @@ for (let i = 0; i < raw.length; i++) {
         correct = 'A'; // Safe default if unknown
     }
 
-    let explanation = matchedSolution ? .explanation || `Correct answer is ${correct} according to the Punjab Textbook Board Class ${cls} ${sub} curriculum.`;
+    let explanation = matchedSolution?.explanation || `Correct answer is ${correct} according to the Punjab Textbook Board Class ${cls} ${sub} curriculum.`;
 
     // Deduplication check
     const dedupKey = `${cls}_${sub}_${chapMeta.name}_${qText.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
