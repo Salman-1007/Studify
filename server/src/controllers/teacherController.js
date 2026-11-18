@@ -237,13 +237,42 @@ export const generateTeacherQuizFromBank = asyncHandler(async (req, res) => {
   if (subjectId) where.subjectId = subjectId;
   if (difficulty && difficulty !== 'MIXED') where.difficulty = difficulty;
 
-  const bankQuestions = await prisma.questionBankItem.findMany({
+  let bankQuestions = await prisma.questionBankItem.findMany({
     where,
     include: { chapter: true, subject: true },
   });
 
+  // If none found with strict difficulty, try without difficulty filter
+  if (bankQuestions.length === 0 && difficulty && difficulty !== 'MIXED') {
+    const fallbackWhere = { ...where };
+    delete fallbackWhere.difficulty;
+    bankQuestions = await prisma.questionBankItem.findMany({
+      where: fallbackWhere,
+      include: { chapter: true, subject: true },
+    });
+  }
+
+  // If none found for specific chapter, fallback to subject
+  if (bankQuestions.length === 0 && chapterId && subjectId) {
+    bankQuestions = await prisma.questionBankItem.findMany({
+      where: { subjectId, status: 'APPROVED' },
+      include: { chapter: true, subject: true },
+    });
+  }
+
+  // If still none found with APPROVED, check for any available questions
+  if (bankQuestions.length === 0 && (subjectId || chapterId)) {
+    const relaxedWhere = {};
+    if (chapterId) relaxedWhere.chapterId = chapterId;
+    else if (subjectId) relaxedWhere.subjectId = subjectId;
+    bankQuestions = await prisma.questionBankItem.findMany({
+      where: relaxedWhere,
+      include: { chapter: true, subject: true },
+    });
+  }
+
   if (bankQuestions.length === 0) {
-    throw new ApiError(404, 'No approved curriculum questions matched your filters');
+    throw new ApiError(404, 'No curriculum questions matched your filters');
   }
 
   const selected = shuffleArray(bankQuestions).slice(
@@ -810,16 +839,38 @@ export const submitAssignmentAttempt = asyncHandler(async (req, res) => {
   const answersSnapshot = [];
   for (const q of snapshot) {
     const given = answers.find((a) => a.questionId === q.id);
-    const givenText = String(given?.answer ?? '').trim();
+    const givenRaw = given?.answer ?? given?.selectedOption ?? '';
+    const givenText = String(givenRaw).trim();
     const expectedText = String(q.correctAnswer ?? '').trim();
-    const isCorrect =
-      givenText.length > 0 && givenText.toLowerCase() === expectedText.toLowerCase();
+
+    let isCorrect = false;
+    if (givenText.length > 0 && expectedText.length > 0) {
+      if (givenText.toLowerCase() === expectedText.toLowerCase()) {
+        isCorrect = true;
+      } else if (Array.isArray(q.options)) {
+        const letterIdx = ['A', 'B', 'C', 'D'].indexOf(givenText.toUpperCase());
+        if (letterIdx >= 0 && q.options[letterIdx]) {
+          const optStr = typeof q.options[letterIdx] === 'string' ? q.options[letterIdx] : q.options[letterIdx]?.text;
+          if (String(optStr).trim().toLowerCase() === expectedText.toLowerCase()) {
+            isCorrect = true;
+          }
+        }
+        const expIdx = ['A', 'B', 'C', 'D'].indexOf(expectedText.toUpperCase());
+        if (expIdx >= 0 && q.options[expIdx]) {
+          const optStr = typeof q.options[expIdx] === 'string' ? q.options[expIdx] : q.options[expIdx]?.text;
+          if (String(optStr).trim().toLowerCase() === givenText.toLowerCase()) {
+            isCorrect = true;
+          }
+        }
+      }
+    }
+
     if (isCorrect) score += 1;
     answersSnapshot.push({
       questionId: q.id,
       question: q.question,
       options: q.options || [],
-      givenAnswer: given?.answer ?? '',
+      givenAnswer: givenRaw,
       correctAnswer: q.correctAnswer,
       explanation: q.explanation || null,
       isCorrect,

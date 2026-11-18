@@ -410,9 +410,9 @@ export default function TeacherQuizzesScreen({ onBack, onNavigateClassrooms: _on
           chapterId: selectedBankChapter?.id || undefined,
           questionCount: parseInt(bankCount, 10) || 10,
           difficulty: bankDifficulty,
-        }));
+        })).catch(() => null);
 
-        const testData = testRes.data?.data?.attempt || testRes.data?.data;
+        const testData = testRes?.data?.data?.attempt || testRes?.data?.data;
         const rawQs = testData?.questions || testData?.attempt?.questions || [];
         if (rawQs.length > 0) {
           const createPayload = {
@@ -436,7 +436,7 @@ export default function TeacherQuizzesScreen({ onBack, onNavigateClassrooms: _on
           const createdRes = await apiClient.post('/teacher/quizzes', createPayload);
           generatedQuiz = createdRes.data?.data?.quiz || createdRes.data?.data;
         } else {
-          throw new Error('No questions found for this selection.');
+          throw new Error('No approved questions found for this subject/chapter in the bank. Please select another subject or chapter.');
         }
       }
 

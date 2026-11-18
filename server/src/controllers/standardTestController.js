@@ -37,7 +37,7 @@ export const generateTest = asyncHandler(async(req, res) => {
 
     if (!chapter) {
         chapter = await prisma.curriculumChapter.findFirst({
-            where: { subjectId: subject.id, questionItems: { some: { status: 'APPROVED' } } },
+            where: { subjectId: subject.id, questions: { some: { status: 'APPROVED' } } },
             include: { subject: { include: { board: true } } },
         }) || await prisma.curriculumChapter.findFirst({
             where: { subjectId: subject.id },

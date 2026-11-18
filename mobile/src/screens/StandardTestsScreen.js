@@ -282,21 +282,26 @@ export default function StandardTestsScreen({ onBack }) {
       );
 
       const answersArray = questions.map((q, idx) => ({
-        questionId: q.id,
+        questionId: q.id || q.questionId,
         selectedOption: selectedAnswers[idx] || null,
+        answer: selectedAnswers[idx] || null,
       }));
 
       const res = await apiClient
         .post('/tests/submit', {
           attemptId: activeAttempt?.attemptId || activeAttempt?.id,
           answers: answersArray,
+          responses: answersArray,
           timeTakenSecs: totalTimeTaken,
+          durationSeconds: totalTimeTaken,
         })
         .catch(() =>
           apiClient.post('/standard-tests/submit', {
             attemptId: activeAttempt?.attemptId || activeAttempt?.id,
             answers: answersArray,
+            responses: answersArray,
             timeTakenSecs: totalTimeTaken,
+            durationSeconds: totalTimeTaken,
           })
         );
 

@@ -106,13 +106,25 @@ export default function QuizzesScreen({ initialTrack = null }) {
     questions.forEach((q, idx) => {
       const chosen = selectedAnswers[idx];
       const correctAns = q.correctAnswer || q.correctOption;
-      const isCorrect = chosen === correctAns;
+      const chosenOpt = Array.isArray(q.options)
+        ? q.options.find((o) => (o.key || o) === chosen)
+        : null;
+      const chosenText = chosenOpt?.text || chosenOpt || chosen;
+
+      const isCorrect =
+        chosen === correctAns ||
+        (chosenText && String(chosenText).toLowerCase() === String(correctAns).toLowerCase()) ||
+        (correctAns === 'A' && chosen === 'A') ||
+        (correctAns === 'B' && chosen === 'B') ||
+        (correctAns === 'C' && chosen === 'C') ||
+        (correctAns === 'D' && chosen === 'D');
+
       if (isCorrect) {
         score++;
       } else {
         mistakes.push({
           question: q.questionText || q.question,
-          chosen: chosen || 'Skipped',
+          chosen: chosenText || chosen || 'Skipped',
           correct: correctAns,
           explanation: q.explanation,
         });

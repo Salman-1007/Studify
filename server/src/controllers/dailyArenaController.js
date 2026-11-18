@@ -202,7 +202,11 @@ export const generateDailyChallenge = asyncHandler(async(req, res) => {
 
 export const submitDailyChallenge = asyncHandler(async(req, res) => {
     const userId = req.user.id;
-    const { attemptId, durationSeconds = 0, responses = [] } = req.body;
+    const { attemptId } = req.body;
+    const durationSeconds = Number(req.body.durationSeconds) || Number(req.body.timeTakenSecs) || 0;
+    const rawResponses = Array.isArray(req.body.responses)
+        ? req.body.responses
+        : (Array.isArray(req.body.answers) ? req.body.answers : []);
 
     if (!attemptId) throw new ApiError(400, 'attemptId is required');
 
@@ -227,8 +231,12 @@ export const submitDailyChallenge = asyncHandler(async(req, res) => {
     if (attempt.isSubmitted) throw new ApiError(400, 'Attempt has already been submitted');
 
     const responseMap = new Map();
-    for (const r of responses) {
-        responseMap.set(r.questionId, r);
+    for (const r of rawResponses) {
+        if (!r) continue;
+        const qId = r.questionId || r.id;
+        if (qId) {
+            responseMap.set(qId, r);
+        }
     }
 
     let correctCount = 0;
@@ -241,9 +249,11 @@ export const submitDailyChallenge = asyncHandler(async(req, res) => {
     for (const qa of attempt.questionAttempts) {
         const q = qa.question;
         const r = responseMap.get(q.id);
-        const selectedOption = r?.selectedOption ? String(r.selectedOption).toUpperCase() : null;
+        const rawChoice = r?.selectedOption ?? r?.answer ?? r?.choice ?? null;
+        const selectedOption = rawChoice ? String(rawChoice).trim().toUpperCase() : null;
         const timeSpentSeconds = Number(r?.timeSpentSeconds) || 0;
-        const isCorrect = selectedOption === q.correctAnswer;
+        const expectedAnswer = q.correctAnswer ? String(q.correctAnswer).trim().toUpperCase() : null;
+        const isCorrect = selectedOption && expectedAnswer ? selectedOption === expectedAnswer : false;
 
         if (!selectedOption) {
             unansweredCount++;
@@ -330,6 +340,10 @@ export const submitDailyChallenge = asyncHandler(async(req, res) => {
     const reviewQuestions = attempt.questionAttempts.map((qa) => {
         const q = qa.question;
         const r = responseMap.get(q.id);
+        const rawChoice = r?.selectedOption ?? r?.answer ?? r?.choice ?? null;
+        const selectedOption = rawChoice ? String(rawChoice).trim().toUpperCase() : null;
+        const expectedAnswer = q.correctAnswer ? String(q.correctAnswer).trim().toUpperCase() : null;
+        const isCorrect = selectedOption && expectedAnswer ? selectedOption === expectedAnswer : false;
         return {
             questionId: q.id,
             questionText: q.questionText,
@@ -339,9 +353,9 @@ export const submitDailyChallenge = asyncHandler(async(req, res) => {
             optionB: q.optionB,
             optionC: q.optionC,
             optionD: q.optionD,
-            selectedOption: r?.selectedOption || null,
+            selectedOption,
             correctAnswer: q.correctAnswer,
-            isCorrect: r?.selectedOption === q.correctAnswer,
+            isCorrect,
             explanation: q.explanation,
         };
     });

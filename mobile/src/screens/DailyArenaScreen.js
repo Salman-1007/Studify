@@ -227,15 +227,18 @@ export default function DailyArenaScreen({ onBack }) {
       );
 
       const formattedAnswers = questions.map((q, idx) => ({
-        questionId: q.id,
+        questionId: q.id || q.questionId,
         selectedOption: selectedAnswers[idx] || null,
+        answer: selectedAnswers[idx] || null,
         timeSpentSeconds: questionTimes[idx] || 10,
       }));
 
       const res = await apiClient.post('/daily-arena/submit', {
-        attemptId: activeAttempt?.attemptId,
-        answers: formattedAnswers,
+        attemptId: activeAttempt?.attemptId || activeAttempt?.id,
+        durationSeconds: totalTimeTaken,
         timeTakenSecs: totalTimeTaken,
+        responses: formattedAnswers,
+        answers: formattedAnswers,
         tabSwitches,
       });
 
